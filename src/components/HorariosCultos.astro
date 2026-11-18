@@ -1,0 +1,65 @@
+---
+// Cards de horários: destaca o culto mais próximo ("Hoje", "Amanhã", "Em 3 dias")
+// e oferece salvar no Google Agenda.
+import { SITE, fmtHora } from '../config/site';
+import { linkGoogleAgenda } from '../lib/agenda';
+import Icone from './Icone.astro';
+---
+<horarios-cultos class="block">
+  <ul class="grid gap-4 pt-3 md:grid-cols-3">
+    {SITE.cultos.map((c, i) => (
+      <li data-culto={i} class="card culto-card relative flex flex-col p-6 transition">
+        <span class="absolute -top-3 right-6 flex gap-1.5">
+          <span data-quando hidden class="rounded-full bg-tinta px-3 py-1 text-xs font-bold text-white"></span>
+          {i === 0 && <span class="rounded-full bg-laranja-500 px-3 py-1 text-xs font-bold">Principal</span>}
+        </span>
+        <p class="text-sm font-bold tracking-wider text-laranja-700 uppercase">{c.diaNome}</p>
+        <p class="mt-2 text-3xl font-extrabold tracking-tight">{fmtHora(c.inicio)} <span class="text-lg font-semibold text-tinta-suave">às {fmtHora(c.fim)}</span></p>
+        <p class="mt-3 font-bold">{c.nome}</p>
+        <p class="mt-1 flex-1 text-sm text-tinta-suave">{c.descricao}</p>
+        <p class="mt-4 flex items-center gap-2 text-sm text-tinta-suave"><Icone nome="local" class="size-4 text-laranja-600" /> Fundação, São Caetano do Sul</p>
+        <div class="mt-5 border-t border-tinta/8 pt-4">
+          <a data-google href={linkGoogleAgenda(c)} target="_blank" rel="noopener" class="inline-flex items-center gap-2 text-sm font-bold text-laranja-700 hover:underline">
+            <Icone nome="calendario" class="size-4" /> Salvar no Google Agenda
+          </a>
+        </div>
+      </li>
+    ))}
+  </ul>
+</horarios-cultos>
+
+<style>
+  .culto-card[data-proximo] {
+    border-color: var(--color-laranja-300);
+    box-shadow: 0 0 0 4px var(--color-laranja-100);
+  }
+</style>
+
+<script>
+  import { SITE } from '../config/site';
+  import { situacao, rotuloQuando, linkGoogleAgenda } from '../lib/agenda';
+
+  class HorariosCultos extends HTMLElement {
+    connectedCallback() {
+      const atualizar = () => {
+        const sit = SITE.cultos.map((c) => situacao(c));
+        const prox = sit.reduce((m, s, i) => (s.falta < sit[m].falta ? i : m), 0);
+        this.querySelectorAll<HTMLElement>('[data-culto]').forEach((li) => {
+          const i = +li.dataset.culto!;
+          const s = sit[i];
+          const selo = li.querySelector<HTMLElement>('[data-quando]')!;
+          // Só o culto mais próximo ganha selo e destaque
+          selo.hidden = i !== prox;
+          selo.textContent = rotuloQuando(s);
+          selo.className = 'rounded-full px-3 py-1 text-xs font-bold text-white ' + (s.aoVivo ? 'bg-red-600' : 'bg-tinta');
+          li.toggleAttribute('data-proximo', i === prox);
+          // Atualiza o link do Google Agenda para a próxima data real
+          li.querySelector<HTMLAnchorElement>('[data-google]')!.href = linkGoogleAgenda(SITE.cultos[i]);
+        });
+      };
+      atualizar();
+      setInterval(atualizar, 60_000);
+    }
+  }
+  customElements.define('horarios-cultos', HorariosCultos);
+</script>

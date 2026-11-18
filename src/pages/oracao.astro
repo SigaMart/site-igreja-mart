@@ -1,0 +1,74 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import TopoPagina from '../components/TopoPagina.astro';
+import Icone from '../components/Icone.astro';
+import { SITE } from '../config/site';
+import { passagem } from '../lib/biblia';
+import foto from '../assets/fotos/oracao.jpg';
+import fotoTopo from '../assets/fotos/mart/reunidos.jpg';
+
+const v = passagem('Tiago 5:16');
+const migalhas = [{ nome: 'Pedido de oração', url: '/oracao/' }];
+---
+<Base
+  titulo="Pedido de oração"
+  descricao="Envie seu pedido de oração para a Igreja MART em São Caetano do Sul. Nossa equipe de intercessão ora por cada pedido com carinho e sigilo."
+  migalhas={migalhas}
+>
+  <TopoPagina etiqueta="Pedido de oração" titulo="Pedido de" destaque="oração" texto="Escreva seu pedido. A equipe de intercessão vai orar por você, e o que você escrever fica em sigilo." migalhas={migalhas} foto={fotoTopo} fotoAlt="Irmãos de mãos dadas orando durante um culto" />
+
+  <section class="container-site grid gap-12 py-16 lg:grid-cols-[1.2fr_1fr]">
+    <form id="form-oracao" class="card space-y-5 p-8 sm:p-10">
+      <div class="grid gap-5 sm:grid-cols-2">
+        <label class="block">
+          <span class="text-sm font-bold">Seu nome <span class="font-normal text-tinta-suave">(opcional)</span></span>
+          <input name="nome" type="text" autocomplete="given-name" class="mt-2 w-full rounded-xl border border-tinta/15 bg-creme px-4 py-3 outline-none focus:border-laranja-500" />
+        </label>
+        <label class="block">
+          <span class="text-sm font-bold">WhatsApp ou e-mail <span class="font-normal text-tinta-suave">(opcional)</span></span>
+          <input name="contato" type="text" class="mt-2 w-full rounded-xl border border-tinta/15 bg-creme px-4 py-3 outline-none focus:border-laranja-500" />
+        </label>
+      </div>
+      <label class="block">
+        <span class="text-sm font-bold">Motivo</span>
+        <select name="motivo" class="mt-2 w-full rounded-xl border border-tinta/15 bg-creme px-4 py-3 outline-none focus:border-laranja-500">
+          {['Saúde', 'Família', 'Trabalho e finanças', 'Emocional', 'Vida espiritual', 'Gratidão', 'Outro'].map((o) => <option>{o}</option>)}
+        </select>
+      </label>
+      <label class="block">
+        <span class="text-sm font-bold">Seu pedido</span>
+        <textarea name="pedido" required rows="6" class="mt-2 w-full rounded-xl border border-tinta/15 bg-creme px-4 py-3 outline-none focus:border-laranja-500" placeholder="Escreva aqui o seu pedido de oração…"></textarea>
+      </label>
+      <label class="flex items-start gap-3 text-sm text-tinta-suave">
+        <input name="contatar" type="checkbox" class="mt-1 size-4 accent-laranja-500" />
+        Gostaria que alguém da igreja entrasse em contato comigo.
+      </label>
+      <button class="btn btn-primario w-full sm:w-auto"><Icone nome="maos" class="size-4" /> Enviar pedido</button>
+      <p class="text-sm text-tinta-suave">Seu pedido é tratado com sigilo e usado apenas para oração e, se você pedir, para entrarmos em contato.</p>
+      <div id="aviso" hidden class="rounded-2xl bg-laranja-50 p-5 text-sm">
+        <p class="font-bold">O envio pelo site está sendo configurado.</p>
+        <p class="mt-1 text-tinta-suave">Enquanto isso, mande seu pedido pelo nosso Instagram, que a equipe de intercessão vai orar por você.</p>
+        <a href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn btn-escuro mt-3"><Icone nome="instagram" class="size-4" /> Enviar pelo Instagram</a>
+      </div>
+    </form>
+
+    <aside class="space-y-6">
+      <Image src={foto} alt="Pessoas orando por um homem sentado" widths={[400, 800]} sizes="(min-width: 1024px) 440px, 100vw" class="aspect-[4/3] w-full rounded-[2rem] object-cover" />
+      <figure class="rounded-3xl bg-laranja-50 p-6">
+        <blockquote class="verso text-xl leading-snug">“{v.texto}”</blockquote>
+        <figcaption class="mt-3 text-sm font-bold text-laranja-700"><a href={v.url}>{v.referencia}</a></figcaption>
+      </figure>
+    </aside>
+  </section>
+</Base>
+
+<script>
+  // TODO (publicação): enviar para uma Cloudflare Function que grava no banco (D1) e avisa a equipe.
+  document.getElementById('form-oracao')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const aviso = document.getElementById('aviso')!;
+    aviso.hidden = false;
+    aviso.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+</script>

@@ -1,0 +1,31 @@
+---
+// Barra de navegação fixa no rodapé da tela (só celular/tablet)
+import Icone from './Icone.astro';
+const atual = Astro.url.pathname;
+const ITENS = [
+  { href: '/', label: 'Início', icone: 'casa' },
+  { href: '/cultos/', label: 'Cultos', icone: 'calendario' },
+  { href: '/devocionais/', label: 'Devocionais', icone: 'sol' },
+  { href: '/biblia/', label: 'Bíblia', icone: 'livro' },
+] as const;
+const ativo = (href: string) => (href === '/' ? atual === '/' : atual.startsWith(href));
+---
+<nav aria-label="Atalhos" class="fixed inset-x-0 bottom-0 z-40 border-t border-tinta/8 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgb(42_29_22/0.18)] backdrop-blur-md lg:hidden">
+  <ul class="mx-auto grid h-16 max-w-md grid-cols-5">
+    {ITENS.map((i) => (
+      <li>
+        <a href={i.href} aria-current={ativo(i.href) ? 'page' : undefined} class:list={['relative flex h-full flex-col items-center justify-center gap-1 text-[0.68rem] font-semibold', ativo(i.href) ? 'text-laranja-700' : 'text-tinta/60']}>
+          {ativo(i.href) && <span class="absolute top-0 h-1 w-8 rounded-b-full bg-laranja-500"></span>}
+          <Icone nome={i.icone} class="size-5" />
+          {i.label}
+        </a>
+      </li>
+    ))}
+    <li>
+      <button type="button" data-abrir-menu aria-haspopup="dialog" aria-controls="menu-mobile" class="flex h-full w-full flex-col items-center justify-center gap-1 text-[0.68rem] font-semibold text-tinta/60">
+        <Icone nome="menu" class="size-5" />
+        Menu
+      </button>
+    </li>
+  </ul>
+</nav>

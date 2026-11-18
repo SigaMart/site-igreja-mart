@@ -1,0 +1,49 @@
+---
+import Base from '../layouts/Base.astro';
+import TopoPagina from '../components/TopoPagina.astro';
+import fotoTopo from '../assets/fotos/mart/adoracao2.jpg';
+import Icone from '../components/Icone.astro';
+import { SITE, enderecoCompleto, mapsLink, mapsEmbed, fmtHora } from '../config/site';
+
+const migalhas = [{ nome: 'Contato', url: '/contato/' }];
+---
+<Base
+  titulo="Contato e como chegar"
+  descricao={`Endereço, mapa e redes sociais da Igreja MART: ${enderecoCompleto}. Veja como chegar de carro ou transporte público.`}
+  migalhas={migalhas}
+>
+  <TopoPagina etiqueta="Contato" titulo="Fale com a" destaque="gente" texto="Av. Conde Francisco Matarazzo, 557, bairro Fundação, São Caetano do Sul. Ou mande uma mensagem pelo Instagram." migalhas={migalhas} foto={fotoTopo} fotoAlt="Culto na Igreja MART" />
+
+  <section class="container-site grid gap-6 py-16 lg:grid-cols-3">
+    <div class="card p-8">
+      <span class="flex size-12 items-center justify-center rounded-2xl bg-laranja-500"><Icone nome="local" /></span>
+      <h2 class="mt-5 text-xl font-extrabold">Endereço</h2>
+      <address class="mt-2 text-tinta-suave not-italic">{SITE.endereco.rua}<br />{SITE.endereco.bairro}, {SITE.endereco.cidade} - {SITE.endereco.uf}<br />CEP {SITE.endereco.cep}</address>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a href={mapsLink} target="_blank" rel="noopener" class="btn btn-escuro py-2">Google Maps</a>
+        <a href={`https://waze.com/ul?q=${encodeURIComponent(enderecoCompleto)}`} target="_blank" rel="noopener" class="btn btn-contorno py-2">Waze</a>
+      </div>
+    </div>
+    <div class="card p-8">
+      <span class="flex size-12 items-center justify-center rounded-2xl bg-laranja-500"><Icone nome="relogio" /></span>
+      <h2 class="mt-5 text-xl font-extrabold">Cultos</h2>
+      <ul class="mt-2 space-y-1 text-tinta-suave">
+        {SITE.cultos.map((c) => <li><strong class="text-tinta">{c.diaNome}:</strong> {fmtHora(c.inicio)} às {fmtHora(c.fim)}</li>)}
+      </ul>
+      <a href="/cultos/" class="mt-5 inline-flex items-center gap-2 font-bold text-laranja-700 hover:underline">Ver detalhes <Icone nome="seta" class="size-4" /></a>
+    </div>
+    <div class="card p-8">
+      <span class="flex size-12 items-center justify-center rounded-2xl bg-laranja-500"><Icone nome="chat" /></span>
+      <h2 class="mt-5 text-xl font-extrabold">Redes sociais</h2>
+      <p class="mt-2 text-tinta-suave">Avisos, fotos e programação da semana.</p>
+      <div class="mt-5 grid gap-2">
+        <a href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn btn-contorno justify-start"><Icone nome="instagram" class="size-4" /> Instagram {SITE.instagramUsuario}</a>
+        <a href={SITE.redes.facebook} target="_blank" rel="noopener" class="btn btn-contorno justify-start"><Icone nome="facebook" class="size-4" /> Facebook /sigamart</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container-site">
+    <iframe title="Mapa com a localização da Igreja MART" src={mapsEmbed} class="h-[420px] w-full rounded-[2rem] border-0 shadow-sm" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+  </section>
+</Base>

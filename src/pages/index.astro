@@ -1,0 +1,268 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import Icone from '../components/Icone.astro';
+import PalavraDoDia from '../components/PalavraDoDia.astro';
+import ProximoCulto from '../components/ProximoCulto.astro';
+import HorariosCultos from '../components/HorariosCultos.astro';
+import CelularWhatsApp from '../components/CelularWhatsApp.astro';
+import Perguntas from '../components/Perguntas.astro';
+import { SITE, enderecoCompleto, mapsLink, mapsEmbed } from '../config/site';
+import { FAQ } from '../lib/faq';
+import { schemaFaq } from '../lib/schema';
+import { passagem } from '../lib/biblia';
+import fotoHero from '../assets/fotos/mart/adoracao.jpg';
+import fotoComunidade from '../assets/fotos/mart/pregacao.jpg';
+import fotoJovens from '../assets/fotos/mart/jovens.jpg';
+
+const devocionais = (await getCollection('devocionais', (d) => !d.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data).slice(0, 3);
+const ministerios = (await getCollection('ministerios')).sort((a, b) => a.data.ordem - b.data.ordem);
+const destaque = devocionais[0];
+const vDestaque = passagem(destaque.data.versiculo);
+const ageu = passagem('Ageu 2:9');
+const ide = passagem('Marcos 16:15');
+ide.texto = ide.texto.replace(/^E disse-lhes:\s*/, ''); // destaca só a fala de Jesus
+const promessas = passagem('2 Coríntios 1:20');
+const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+---
+<Base
+  titulo="Igreja MART | Igreja em São Caetano do Sul"
+  tituloCompleto
+  descricao="Igreja MART, no bairro Fundação, em São Caetano do Sul. Um lugar para ser acolhido, fazer amigos e recomeçar com Deus. Cultos domingo 18h, terça 20h e quarta 15h30."
+  jsonLd={[schemaFaq(FAQ)]}
+>
+  <!-- HERO -->
+  <section class="relative isolate overflow-hidden bg-tinta text-white">
+    <Image src={fotoHero} alt="Igreja MART em adoração durante um culto" widths={[800, 1400, 2000]} sizes="100vw" class="absolute inset-0 -z-10 h-full w-full object-cover object-[60%_center]" loading="eager" fetchpriority="high" />
+    <div class="absolute inset-0 -z-10 bg-gradient-to-r from-tinta/95 via-tinta/70 to-tinta/10"></div>
+    <div class="absolute inset-0 -z-10 bg-gradient-to-t from-tinta/70 via-transparent to-transparent"></div>
+    <!-- Altura = tela inteira menos o cabeçalho (4.5rem): tudo da primeira dobra aparece sem rolar -->
+    <div class="container-site flex min-h-[calc(100svh-8.5rem-env(safe-area-inset-bottom))] flex-col justify-center py-6 lg:min-h-[calc(100svh-4.5rem)] lg:py-8">
+      <div class="max-w-2xl">
+        <span class="eyebrow text-laranja-300">Bairro Fundação · São Caetano do Sul</span>
+        <h1 class="mt-4 text-3xl leading-tight font-extrabold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+          Uma casa para você <span class="text-laranja-400">recomeçar</span> com Deus.
+        </h1>
+        <p class="mt-4 max-w-xl text-base text-white/85 sm:text-lg">
+          Aqui ninguém precisa chegar pronto. Você vai ser recebido pelo nome, encontrar amigos e conhecer o amor de Deus de perto.
+        </p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="/cultos/" class="btn btn-primario">Ver horários dos cultos <Icone nome="seta" class="size-4" /></a>
+          <a href="/sobre/" class="btn border border-white/30 bg-white/10 text-white backdrop-blur hover:bg-white/20">Conheça a igreja</a>
+        </div>
+      </div>
+      <div class="mt-8 flex flex-wrap items-center gap-3">
+        <ProximoCulto />
+        <a href="/biblia/" class="hidden items-center gap-3 rounded-2xl bg-white/95 p-4 pr-6 sm:flex text-tinta shadow-xl shadow-tinta/10">
+          <span class="flex size-11 items-center justify-center rounded-xl bg-tinta text-white"><Icone nome="livro" /></span>
+          <span class="leading-tight"><span class="block font-extrabold">Bíblia online</span><span class="block text-sm text-tinta-suave">Pesquise versículos</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CULTOS -->
+  <section class="container-site py-16 sm:py-20" aria-labelledby="t-cultos">
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <span class="eyebrow">Horários</span>
+        <h2 id="t-cultos" class="titulo mt-4">Venha nos <span class="destaque">visitar</span></h2>
+      </div>
+      <a href="/cultos/#primeira-visita" class="inline-flex items-center gap-2 font-bold text-laranja-700 hover:underline">Primeira vez? Veja o que esperar <Icone nome="seta" class="size-4" /></a>
+    </div>
+    <div class="mt-10"><HorariosCultos /></div>
+  </section>
+
+  <!-- SOBRE -->
+  <section class="bg-areia py-20" aria-labelledby="t-sobre">
+    <div class="container-site grid items-center gap-12 lg:grid-cols-2">
+      <div class="relative">
+        <Image src={fotoComunidade} alt="Pastor pregando para a igreja reunida na MART" widths={[480, 900]} sizes="(min-width: 1024px) 540px, 100vw" class="aspect-[5/4] w-full rounded-[2rem] object-cover" />
+        <div class="card absolute -right-2 -bottom-8 max-w-[19rem] p-5 sm:-right-6">
+          <p class="verso text-lg leading-snug">“{ageu.texto.split(';')[0]}.”</p>
+          <p class="mt-2 text-sm font-bold text-laranja-700">{ageu.referencia}</p>
+        </div>
+      </div>
+      <div>
+        <span class="eyebrow">Quem somos</span>
+        <h2 id="t-sobre" class="titulo mt-4">Restauração do <span class="destaque">Templo</span></h2>
+        <p class="mt-4 text-base text-tinta-suave sm:text-lg">
+          <strong class="text-tinta">MART</strong> é a sigla de <strong class="text-tinta">Ministério Apostólico Restauração do Templo</strong>. O nome resume nossa missão: ver vidas sendo restauradas por Deus, porque a Bíblia ensina que cada pessoa que crê em Jesus é templo do Espírito Santo.
+        </p>
+        <ul class="mt-6 grid gap-3 sm:grid-cols-2">
+          {[['casa', 'Uma família para pertencer'], ['livro', 'Ensino fiel à Bíblia'], ['maos', 'Oração e cuidado'], ['coracao', 'Amor que acolhe']].map(([i, t]) => (
+            <li class="flex items-center gap-3 rounded-2xl bg-white p-4 font-semibold"><span class="flex size-9 items-center justify-center rounded-xl bg-laranja-100 text-laranja-700"><Icone nome={i as any} class="size-5" /></span>{t}</li>
+          ))}
+        </ul>
+        <a href="/sobre/" class="btn btn-escuro mt-8">Nossa história e no que cremos <Icone nome="seta" class="size-4" /></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PALAVRA DO DIA + BUSCA -->
+  <section class="container-site py-20" aria-labelledby="t-palavra">
+    <div class="grid grid-cols-[minmax(0,1fr)] items-center gap-10 lg:grid-cols-[1fr_1.2fr]">
+      <div>
+        <span class="eyebrow">Bíblia</span>
+        <h2 id="t-palavra" class="titulo mt-4">Uma palavra para o seu <span class="destaque">dia</span></h2>
+        <p class="mt-4 text-base text-tinta-suave sm:text-lg">Um versículo por dia para ler e mandar para alguém. Para procurar outra passagem, use a busca.</p>
+        <form action="/biblia/" method="get" role="search" class="mt-8 flex gap-2 rounded-full border border-tinta/10 bg-white p-2 shadow-sm">
+          <label for="busca-home" class="sr-only">Pesquisar na Bíblia</label>
+          <input id="busca-home" name="q" type="search" placeholder="Ex.: João 3:16 ou “paz”" class="min-w-0 flex-1 bg-transparent px-4 outline-none" />
+          <button class="btn btn-primario"><Icone nome="busca" class="size-4" /> <span class="hidden sm:inline">Pesquisar</span></button>
+        </form>
+      </div>
+      <PalavraDoDia />
+    </div>
+  </section>
+
+  <!-- DEVOCIONAIS -->
+  <section class="relative overflow-hidden bg-tinta py-20 text-white" aria-labelledby="t-devocionais">
+    <div class="pointer-events-none absolute -right-40 -bottom-40 size-[30rem] rounded-full bg-laranja-500/25 blur-3xl"></div>
+    <div class="container-site relative grid items-center gap-14 lg:grid-cols-[1.1fr_1fr]">
+      <div>
+        <span class="eyebrow text-laranja-300">Devocionais</span>
+        <h2 id="t-devocionais" class="titulo mt-4">Comece o dia com Deus, <span class="destaque">direto no seu WhatsApp</span></h2>
+        <p class="mt-4 text-base text-white/70 sm:text-lg">Textos curtos com versículo, reflexão e oração. Leia no site e compartilhe com quem você ama.</p>
+        <ul class="mt-8 space-y-3">
+          {devocionais.slice(0, 3).map((d) => (
+            <li>
+              <a href={`/devocionais/${d.id}/`} class="group flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-laranja-400 hover:bg-white/10">
+                <span>
+                  <span class="block text-sm font-semibold text-laranja-300">{dataBR(d.data.data)} · {d.data.versiculo}</span>
+                  <span class="mt-1 block font-bold">{d.data.titulo}</span>
+                </span>
+                <Icone nome="seta" class="size-5 shrink-0 text-white/40 transition group-hover:translate-x-1 group-hover:text-laranja-400" />
+              </a>
+            </li>
+          ))}
+        </ul>
+        <a href="/devocionais/" class="btn btn-primario mt-8">Ver todos os devocionais <Icone nome="seta" class="size-4" /></a>
+      </div>
+      <CelularWhatsApp titulo={destaque.data.titulo} versiculo={vDestaque.texto} referencia={vDestaque.referencia} trecho={destaque.data.descricao} />
+    </div>
+  </section>
+
+  <!-- IDE E PREGAI -->
+  <section class="relative overflow-hidden bg-laranja-500" aria-labelledby="t-ide">
+    <div class="pointer-events-none absolute -top-24 -left-24 size-80 rounded-full bg-laranja-300/50 blur-3xl"></div>
+    <div class="pointer-events-none absolute -right-24 -bottom-24 size-80 rounded-full bg-laranja-700/30 blur-3xl"></div>
+    <div class="container-site relative grid gap-10 py-16 sm:py-20 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+      <div>
+        <p class="eyebrow text-tinta/70">Nossa missão</p>
+        <h2 id="t-ide" class="verso mt-4 text-3xl leading-tight text-tinta sm:text-4xl lg:text-5xl">“{ide.texto}”</h2>
+        <p class="mt-4 font-bold text-tinta"><a href={ide.url} class="hover:underline">{ide.referencia}</a></p>
+      </div>
+      <div class="rounded-3xl bg-white/90 p-6 shadow-xl shadow-laranja-800/10 sm:p-8">
+        <p class="text-tinta-suave">É por isso que a MART existe: para que mais pessoas conheçam Jesus e vivam as promessas de Deus. E toda promessa dele se cumpre em Cristo.</p>
+        <blockquote class="verso mt-4 text-lg leading-snug">“{promessas.texto}”</blockquote>
+        <p class="mt-2 text-sm font-bold text-laranja-700"><a href={promessas.url} class="hover:underline">{promessas.referencia}</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- MINISTÉRIOS -->
+  <section class="container-site py-20" aria-labelledby="t-ministerios">
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <span class="eyebrow">Ministérios</span>
+        <h2 id="t-ministerios" class="titulo mt-4">Tem um lugar <span class="destaque">para você</span></h2>
+      </div>
+      <a href="/ministerios/" class="inline-flex items-center gap-2 font-bold text-laranja-700 hover:underline">Todos os ministérios <Icone nome="seta" class="size-4" /></a>
+    </div>
+    <ul class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {ministerios.map((m) => (
+        <li>
+          <a href={`/ministerios/${m.id}/`} class="group relative block overflow-hidden rounded-3xl">
+            <Image src={m.data.imagem} alt={m.data.imagemAlt} widths={[400, 700]} sizes="(min-width: 1024px) 370px, (min-width: 640px) 50vw, 100vw" class="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-105" />
+            <span class="absolute inset-0 bg-gradient-to-t from-tinta/90 via-tinta/30 to-transparent"></span>
+            <span class="absolute inset-x-0 bottom-0 p-6 text-white">
+              <span class="block text-xl font-extrabold">{m.data.nome}</span>
+              <span class="mt-1 block text-sm text-white/80">{m.data.chamada}</span>
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <!-- BLOG -->
+  <section class="bg-areia py-20" aria-labelledby="t-blog">
+    <div class="container-site">
+      <div class="flex flex-wrap items-end justify-between gap-6">
+        <div>
+          <span class="eyebrow">Blog</span>
+          <h2 id="t-blog" class="titulo mt-4">Fé para a <span class="destaque">vida real</span></h2>
+          <p class="mt-4 max-w-xl text-tinta-suave">Textos sobre fé, família, trabalho e o dia a dia.</p>
+        </div>
+        <a href="/blog/" class="inline-flex items-center gap-2 font-bold text-laranja-700 hover:underline">Ver o blog <Icone nome="seta" class="size-4" /></a>
+      </div>
+      <ul class="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {posts.map((p) => (
+          <li class="card group overflow-hidden">
+            <a href={`/blog/${p.id}/`} class="block">
+              <Image src={p.data.imagem} alt={p.data.imagemAlt} widths={[400, 700]} sizes="(min-width: 1024px) 370px, 100vw" class="aspect-[16/10] w-full object-cover" />
+              <div class="p-6">
+                <p class="text-sm font-bold tracking-wider text-laranja-700 uppercase">{p.data.categoria}</p>
+                <h3 class="mt-2 text-lg leading-snug font-extrabold group-hover:text-laranja-700">{p.data.titulo}</h3>
+                <p class="mt-2 line-clamp-2 text-sm text-tinta-suave">{p.data.descricao}</p>
+              </div>
+            </a>
+          </li>
+        ))}
+        <li class="card relative flex flex-col justify-end overflow-hidden p-0 md:col-span-2 lg:col-span-1">
+          <Image src={fotoJovens} alt="Jovens da Igreja MART reunidos" widths={[400, 700]} sizes="(min-width: 1024px) 370px, 100vw" class="absolute inset-0 h-full w-full object-cover" />
+          <span class="absolute inset-0 bg-gradient-to-t from-laranja-800/95 via-laranja-700/50 to-transparent"></span>
+          <div class="relative p-6 pt-40 text-white">
+            <p class="text-lg font-extrabold">Siga a MART no Instagram</p>
+            <p class="mt-1 text-sm text-white/85">Fotos dos cultos, avisos e programação da semana.</p>
+            <a href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn mt-4 bg-white text-tinta hover:bg-laranja-50"><Icone nome="instagram" class="size-4" /> {SITE.instagramUsuario}</a>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LOCALIZAÇÃO -->
+  <section class="container-site py-20" aria-labelledby="t-local">
+    <div class="card grid overflow-hidden lg:grid-cols-[1fr_1.3fr]">
+      <div class="p-8 sm:p-12">
+        <span class="eyebrow">Localização</span>
+        <h2 id="t-local" class="titulo mt-4">No coração de <span class="destaque">São Caetano</span></h2>
+        <address class="mt-6 flex gap-3 text-lg not-italic"><Icone nome="local" class="mt-1 size-5 shrink-0 text-laranja-600" />{enderecoCompleto}</address>
+        <p class="mt-4 text-tinta-suave">Bairro Fundação, próximo ao centro de São Caetano do Sul, com fácil acesso para quem vem de Santo André, São Bernardo e da zona sul e leste de São Paulo.</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href={mapsLink} target="_blank" rel="noopener" class="btn btn-primario"><Icone nome="local" class="size-4" /> Abrir no Google Maps</a>
+          <a href={`https://waze.com/ul?q=${encodeURIComponent(enderecoCompleto)}`} target="_blank" rel="noopener" class="btn btn-contorno">Abrir no Waze</a>
+        </div>
+      </div>
+      <iframe title="Mapa com a localização da Igreja MART" src={mapsEmbed} class="h-80 w-full border-0 lg:h-full lg:min-h-[420px]" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+  </section>
+
+  <!-- PERGUNTAS -->
+  <section class="container-site grid gap-10 pb-8 lg:grid-cols-[1fr_1.6fr]" aria-labelledby="t-faq">
+    <div>
+      <span class="eyebrow">Dúvidas</span>
+      <h2 id="t-faq" class="titulo mt-4">Perguntas <span class="destaque">frequentes</span></h2>
+      <p class="mt-4 text-tinta-suave">Não achou o que procurava? Fale com a gente no Instagram.</p>
+    </div>
+    <Perguntas itens={FAQ} />
+  </section>
+
+  <!-- ORAÇÃO -->
+  <section class="container-site pt-16">
+    <div class="relative overflow-hidden rounded-[2rem] bg-laranja-500 px-8 py-12 sm:px-14">
+      <div class="pointer-events-none absolute -top-20 -right-20 size-72 rounded-full bg-laranja-300/60 blur-2xl"></div>
+      <div class="relative flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+        <div>
+          <h2 class="text-3xl font-extrabold tracking-tight">Podemos orar por você?</h2>
+          <p class="mt-2 max-w-xl text-tinta/80">Conte para nós o seu pedido. Nossa equipe de intercessão vai orar por você, com todo carinho e sigilo.</p>
+        </div>
+        <a href="/oracao/" class="btn btn-escuro shrink-0"><Icone nome="maos" class="size-4" /> Enviar pedido de oração</a>
+      </div>
+    </div>
+  </section>
+</Base>

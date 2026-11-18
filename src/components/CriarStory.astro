@@ -1,0 +1,371 @@
+---
+// Editor de imagem 9:16 (Stories do Instagram / Status do WhatsApp) com o versículo.
+// Uso: <CriarStory texto="..." referencia="João 3:16" titulo="..." />
+import { getImage } from 'astro:assets';
+import Icone from './Icone.astro';
+// Peso 500 da fonte clássica: traço mais firme, fica mais nítido na imagem final
+import '@fontsource/fraunces/500-italic.css';
+import { SITE } from '../config/site';
+import logoPadrao from '../assets/logo/logo-padrao-3x.png';
+import logoClara from '../assets/logo/logo-clara.png';
+
+// Fotos de natureza/paisagem para o fundo (Unsplash). Para trocar, adicione/remova arquivos na pasta.
+const NATUREZA = Object.entries(import.meta.glob<{ default: ImageMetadata }>('../assets/fotos/natureza/*.jpg', { eager: true }))
+  .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+  .map(([, m]) => m.default);
+
+// semBotao + nome: o editor fica escondido e é aberto por script com elemento.abrirCom(texto, referencia)
+interface Props { texto?: string; referencia?: string; titulo?: string; rotulo?: string; class?: string; semBotao?: boolean; nome?: string }
+const { texto = '', referencia = '', titulo = '', rotulo = 'Criar imagem para Stories', class: classe = 'btn btn-escuro', semBotao = false, nome } = Astro.props;
+
+const id = 'story-' + Math.random().toString(36).slice(2, 8);
+const dominio = SITE.url.replace(/^https?:\/\//, '');
+
+// Fundos de cor (degradê). "texto" = cor sugerida para as letras.
+const CORES = [
+  { nome: 'Creme', a: '#fffaf4', b: '#f3e3cf', texto: '#2a1d16' },
+  { nome: 'Laranja', a: '#fb8300', b: '#fdba74', texto: '#2a1d16' },
+  { nome: 'Rosé', a: '#fde3d8', b: '#f2a38a', texto: '#2a1d16' },
+  { nome: 'Pôr do sol', a: '#f97316', b: '#9f1239', texto: '#ffffff' },
+  { nome: 'Noite', a: '#1c130e', b: '#5b3a24', texto: '#ffffff' },
+  { nome: 'Oliva', a: '#2f3a22', b: '#6b7a45', texto: '#ffffff' },
+  { nome: 'Mar', a: '#0f2a44', b: '#2f7891', texto: '#ffffff' },
+  { nome: 'Lavanda', a: '#2e1f4f', b: '#8a6fb8', texto: '#ffffff' },
+];
+
+const fotos = await Promise.all(
+  NATUREZA.map(async (src, i) => ({
+    nome: `Paisagem ${i + 1}`,
+    grande: (await getImage({ src, width: 1080, height: 1920, fit: 'cover', format: 'jpg', quality: 90 })).src,
+    mini: (await getImage({ src, width: 96, height: 170, fit: 'cover', format: 'webp' })).src,
+  })),
+);
+const logos = {
+  claro: (await getImage({ src: logoPadrao, width: 240, format: 'png' })).src, // para fundos escuros
+  escuro: (await getImage({ src: logoClara, width: 240, format: 'png' })).src, // para fundos claros
+};
+const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos };
+---
+<criar-story data-config={JSON.stringify(config)} data-id={id} data-nome={nome} class="contents">
+  {!semBotao && <button type="button" data-abrir class={classe}><Icone nome="estrela" class="size-4" /> {rotulo}</button>}
+
+  <dialog id={id} aria-label="Criar imagem para Stories" class="modal-story m-0 h-dvh max-h-none w-full max-w-none bg-creme p-0 text-tinta lg:m-auto lg:h-[min(52rem,92vh)] lg:max-w-5xl lg:rounded-3xl">
+    <div class="flex h-full flex-col">
+      <div class="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-tinta/8 px-4 sm:px-6">
+        <div class="leading-tight">
+          <p class="font-extrabold">Imagem para Stories e Status</p>
+          <p class="text-xs text-tinta-suave">Escolha o fundo e as cores, depois compartilhe</p>
+        </div>
+        <button type="button" data-fechar class="flex size-10 items-center justify-center rounded-full bg-white" aria-label="Fechar"><Icone nome="fechar" class="size-5" /></button>
+      </div>
+
+      <div class="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[auto_1fr] lg:overflow-hidden">
+        <!-- Prévia -->
+        <div class="flex items-center justify-center bg-areia p-4 lg:min-h-0 lg:p-6">
+          <canvas data-canvas width="1080" height="1920" class="aspect-[9/16] h-[46svh] w-auto rounded-2xl shadow-xl shadow-tinta/20 lg:h-[calc(min(52rem,92vh)-11rem)]" role="img" aria-label="Prévia da imagem com o versículo"></canvas>
+        </div>
+
+        <!-- Controles -->
+        <div class="space-y-6 p-4 sm:p-6 lg:overflow-y-auto">
+          <fieldset>
+            <legend class="text-sm font-bold">Cores</legend>
+            <div data-fundos class="mt-3 flex flex-wrap gap-2">
+              {CORES.map((c, i) => (
+                <button type="button" data-fundo={`cor:${i}`} aria-label={`Fundo ${c.nome}`} title={c.nome} class="opcao-fundo size-11 rounded-xl border border-tinta/10" style={`background:linear-gradient(160deg,${c.a},${c.b})`}></button>
+              ))}
+            </div>
+            <p class="mt-4 text-sm font-bold">Paisagens</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              {fotos.map((f, i) => (
+                <button type="button" data-fundo={`foto:${i}`} aria-label={`Fundo: ${f.nome}`} title={f.nome} class="opcao-fundo h-16 w-9 overflow-hidden rounded-lg bg-cover bg-center" style={`background-image:url(${f.mini})`}></button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset data-grupo-escurecer hidden>
+            <legend class="text-sm font-bold">Escurecer a foto</legend>
+            <input data-escurecer type="range" min="0" max="85" value="45" class="mt-3 w-full accent-laranja-500" aria-label="Escurecer a foto" />
+          </fieldset>
+
+          <fieldset>
+            <legend class="text-sm font-bold">Cor do texto</legend>
+            <div class="mt-3 flex flex-wrap gap-2">
+              {[['#ffffff', 'Branco'], ['#fff1dc', 'Creme'], ['#2a1d16', 'Escuro'], ['#fb8300', 'Laranja'], ['#fdba74', 'Pêssego']].map(([cor, nome]) => (
+                <button type="button" data-cor={cor} aria-label={`Texto ${nome}`} title={nome} class="opcao-cor size-10 rounded-full border border-tinta/15" style={`background:${cor}`}></button>
+              ))}
+            </div>
+          </fieldset>
+
+          <div class="grid gap-6 sm:grid-cols-2">
+            <fieldset>
+              <legend class="text-sm font-bold">Letra</legend>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" data-fonte="serif" class="opcao-chip verso text-lg">Clássica</button>
+                <button type="button" data-fonte="sans" class="opcao-chip font-extrabold">Moderna</button>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend class="text-sm font-bold">Alinhamento</legend>
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" data-alinhar="center" class="opcao-chip">Centro</button>
+                <button type="button" data-alinhar="left" class="opcao-chip">Esquerda</button>
+              </div>
+            </fieldset>
+          </div>
+
+          <fieldset>
+            <legend class="text-sm font-bold">Tamanho do texto</legend>
+            <input data-tamanho type="range" min="44" max="96" value="68" class="mt-3 w-full accent-laranja-500" aria-label="Tamanho do texto" />
+          </fieldset>
+        </div>
+      </div>
+
+      <div class="flex shrink-0 gap-2 border-t border-tinta/8 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6">
+        <button type="button" data-compartilhar class="btn btn-primario flex-1"><Icone nome="compartilhar" class="size-4" /> Compartilhar</button>
+        <button type="button" data-baixar class="btn btn-contorno flex-1"><Icone nome="seta" class="size-4 rotate-90" /> Baixar imagem</button>
+      </div>
+    </div>
+  </dialog>
+</criar-story>
+
+<style>
+  .opcao-fundo,
+  .opcao-cor {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    transition: outline-color 0.15s, transform 0.15s;
+  }
+  .opcao-fundo[aria-pressed='true'],
+  .opcao-cor[aria-pressed='true'] {
+    outline-color: var(--color-laranja-500);
+    transform: scale(1.06);
+  }
+  .opcao-chip {
+    border-radius: 0.875rem;
+    border: 1px solid rgb(42 29 22 / 0.12);
+    background: white;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.9rem;
+  }
+  .opcao-chip[aria-pressed='true'] {
+    border-color: var(--color-laranja-500);
+    background: var(--color-laranja-50);
+    color: var(--color-laranja-800);
+  }
+</style>
+
+<script>
+  type Cor = { nome: string; a: string; b: string; texto: string };
+  type Config = { texto: string; referencia: string; titulo: string; dominio: string; cores: Cor[]; fotos: { nome: string; grande: string; mini: string }[]; logos: { claro: string; escuro: string } };
+
+  const W = 1080, H = 1920; // coordenadas de desenho
+  const ESCALA = 1; // imagem final em 1080x1920, o tamanho exato do Status do WhatsApp e dos Stories do Instagram
+  const carregar = (src: string) => new Promise<HTMLImageElement>((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = src; });
+  const ehClara = (hex: string) => { const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150; };
+
+  class CriarStory extends HTMLElement {
+    cfg!: Config;
+    ctx!: CanvasRenderingContext2D;
+    canvas!: HTMLCanvasElement;
+    dialog!: HTMLDialogElement;
+    estado = { fundo: 'cor:0', cor: '#2a1d16', fonte: 'serif', alinhar: 'center', tamanho: 72, escurecer: 35, texto: '' };
+    imgFundo: HTMLImageElement | null = null;
+    logos: Record<string, HTMLImageElement> = {};
+    pronto = false;
+
+    connectedCallback() {
+      this.cfg = JSON.parse(this.dataset.config!);
+      this.estado.texto = this.cfg.texto;
+      this.dialog = this.querySelector('dialog')!;
+      this.canvas = this.querySelector('[data-canvas]')!;
+      this.ctx = this.canvas.getContext('2d')!;
+      this.querySelector('[data-abrir]')?.addEventListener('click', () => this.abrir());
+      this.querySelector('[data-fechar]')!.addEventListener('click', () => this.dialog.close());
+
+      this.querySelectorAll<HTMLButtonElement>('[data-fundo]').forEach((b) => b.addEventListener('click', () => this.escolherFundo(b.dataset.fundo!)));
+      this.querySelectorAll<HTMLButtonElement>('[data-cor]').forEach((b) => b.addEventListener('click', () => { this.estado.cor = b.dataset.cor!; this.atualizar(); }));
+      this.querySelectorAll<HTMLButtonElement>('[data-fonte]').forEach((b) => b.addEventListener('click', () => { this.estado.fonte = b.dataset.fonte!; this.atualizar(); }));
+      this.querySelectorAll<HTMLButtonElement>('[data-alinhar]').forEach((b) => b.addEventListener('click', () => { this.estado.alinhar = b.dataset.alinhar!; this.atualizar(); }));
+      this.querySelector<HTMLInputElement>('[data-tamanho]')!.addEventListener('input', (e) => { this.estado.tamanho = +(e.target as HTMLInputElement).value; this.desenhar(); });
+      this.querySelector<HTMLInputElement>('[data-escurecer]')!.addEventListener('input', (e) => { this.estado.escurecer = +(e.target as HTMLInputElement).value; this.desenhar(); });
+      this.querySelector('[data-baixar]')!.addEventListener('click', () => this.baixar());
+      this.querySelector('[data-compartilhar]')!.addEventListener('click', () => this.compartilhar());
+    }
+
+    // Abre o editor com outro versículo (Palavra do dia, Bíblia)
+    abrirCom(texto: string, referencia: string) {
+      this.cfg.texto = texto;
+      this.cfg.referencia = referencia;
+      this.estado.texto = texto;
+      return this.abrir();
+    }
+
+    async abrir() {
+      this.dialog.showModal();
+      if (!this.pronto) {
+        // Garante as fontes do site carregadas antes de desenhar no canvas
+        await Promise.all([
+          document.fonts.load('italic 500 60px Fraunces'),
+          document.fonts.load('italic 600 60px Fraunces'),
+          document.fonts.load('800 60px "Plus Jakarta Sans Variable"'),
+        ]).catch(() => {});
+        const [claro, escuro] = await Promise.all([carregar(this.cfg.logos.claro), carregar(this.cfg.logos.escuro)]);
+        this.logos = { claro, escuro };
+        if (this.estado.fundo.startsWith('foto:')) this.imgFundo = await carregar(this.cfg.fotos[+this.estado.fundo.split(':')[1]].grande);
+        this.pronto = true;
+      }
+      this.atualizar();
+    }
+
+    async escolherFundo(v: string) {
+      this.estado.fundo = v;
+      const [tipo, i] = v.split(':');
+      if (tipo === 'cor') {
+        this.imgFundo = null;
+        this.estado.cor = this.cfg.cores[+i].texto;
+      } else {
+        this.estado.cor = '#ffffff';
+        this.imgFundo = await carregar(this.cfg.fotos[+i].grande);
+      }
+      this.atualizar();
+    }
+
+    // Marca as opções escolhidas e redesenha
+    atualizar() {
+      const e = this.estado;
+      this.querySelectorAll<HTMLElement>('[data-fundo]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fundo === e.fundo)));
+      this.querySelectorAll<HTMLElement>('[data-cor]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cor === e.cor)));
+      this.querySelectorAll<HTMLElement>('[data-fonte]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fonte === e.fonte)));
+      this.querySelectorAll<HTMLElement>('[data-alinhar]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.alinhar === e.alinhar)));
+      this.querySelector<HTMLElement>('[data-grupo-escurecer]')!.hidden = !this.imgFundo;
+      this.desenhar();
+    }
+
+    quebrarLinhas(texto: string, largura: number) {
+      const linhas: string[] = [];
+      for (const paragrafo of texto.split('\n')) {
+        let linha = '';
+        for (const palavra of paragrafo.split(/\s+/).filter(Boolean)) {
+          const teste = linha ? linha + ' ' + palavra : palavra;
+          if (this.ctx.measureText(teste).width > largura && linha) { linhas.push(linha); linha = palavra; } else linha = teste;
+        }
+        linhas.push(linha);
+      }
+      return linhas;
+    }
+
+    desenhar() {
+      if (!this.pronto) return;
+      const { ctx } = this;
+      const e = this.estado;
+      ctx.setTransform(ESCALA, 0, 0, ESCALA, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.save();
+
+      // Fundo
+      if (this.imgFundo) {
+        const img = this.imgFundo;
+        const esc = Math.max(W / img.width, H / img.height);
+        const w = img.width * esc, h = img.height * esc;
+        ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+        ctx.fillStyle = `rgba(20,12,8,${e.escurecer / 100})`;
+        ctx.fillRect(0, 0, W, H);
+      } else {
+        const c = this.cfg.cores[+e.fundo.split(':')[1]] ?? this.cfg.cores[2];
+        const g = ctx.createLinearGradient(0, 0, W * 0.6, H);
+        g.addColorStop(0, c.a);
+        g.addColorStop(1, c.b);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      const claro = ehClara(e.cor); // texto claro => fundo escuro
+      const destaque = e.cor === '#fb8300' || e.cor === '#fdba74' ? e.cor : claro ? '#fdba74' : '#b25200';
+      const margem = 110;
+      const larg = W - margem * 2;
+      const x = e.alinhar === 'center' ? W / 2 : margem;
+      ctx.textAlign = e.alinhar as CanvasTextAlign;
+      ctx.textBaseline = 'alphabetic';
+
+      // Versículo: diminui a letra até caber na área segura dos Stories
+      const fam = (t: number) => (e.fonte === 'serif' ? `italic 600 ${t}px Fraunces, Georgia, serif` : `800 ${t}px "Plus Jakarta Sans Variable", system-ui, sans-serif`);
+      let tam = e.tamanho, linhas: string[] = [], alturaLinha = 0;
+      const limite = 1020;
+      do {
+        ctx.font = fam(tam);
+        alturaLinha = tam * (e.fonte === 'serif' ? 1.28 : 1.22);
+        linhas = this.quebrarLinhas(e.texto.trim(), larg);
+        if (linhas.length * alturaLinha <= limite) break;
+        tam -= 2;
+      } while (tam > 28);
+
+      const blocoTexto = linhas.length * alturaLinha;
+      const gapRef = 70, alturaRef = 40;
+      const total = blocoTexto + gapRef + alturaRef;
+      let y = Math.max(380, (H - total) / 2 - 20);
+
+      // Aspas decorativas
+      ctx.fillStyle = destaque;
+      ctx.font = 'italic 600 220px Fraunces, Georgia, serif';
+      ctx.globalAlpha = 0.9;
+      ctx.fillText('“', e.alinhar === 'center' ? W / 2 : margem - 10, y + 40);
+      ctx.globalAlpha = 1;
+      y += 90;
+
+      if (this.imgFundo && claro) { ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 2; }
+      ctx.fillStyle = e.cor;
+      ctx.font = fam(tam);
+      for (const l of linhas) { y += alturaLinha; ctx.fillText(l, x, y - alturaLinha * 0.22); }
+
+      // Referência
+      y += gapRef;
+      ctx.fillStyle = destaque;
+      ctx.font = '800 40px "Plus Jakarta Sans Variable", system-ui, sans-serif';
+      if ('letterSpacing' in ctx) (ctx as any).letterSpacing = '4px';
+      ctx.fillText(this.cfg.referencia.toUpperCase(), x, y);
+      if ('letterSpacing' in ctx) (ctx as any).letterSpacing = '0px';
+
+      // Rodapé discreto: logo + site
+      const logo = claro ? this.logos.claro : this.logos.escuro;
+      const lh = 104, lw = (logo.width / logo.height) * lh;
+      ctx.globalAlpha = 1;
+      const yLogo = H - 360;
+      ctx.drawImage(logo, e.alinhar === 'center' ? (W - lw) / 2 : margem, yLogo, lw, lh);
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = e.cor;
+      ctx.font = '700 34px "Plus Jakarta Sans Variable", system-ui, sans-serif';
+      if ('letterSpacing' in ctx) (ctx as any).letterSpacing = '1px';
+      ctx.fillText(this.cfg.dominio, x, yLogo + lh + 52);
+      ctx.restore();
+    }
+
+    gerarArquivo() {
+      const png = !this.imgFundo; // PNG = sem perda (letras perfeitas); fotos em JPEG 0.97 para não ficar pesado
+      const tipo = png ? 'image/png' : 'image/jpeg';
+      const nome = png ? 'versiculo-igreja-mart.png' : 'versiculo-igreja-mart.jpg';
+      return new Promise<File>((ok) => this.canvas.toBlob((b) => ok(new File([b!], nome, { type: tipo })), tipo, 0.97));
+    }
+
+    async baixar() {
+      const arq = await this.gerarArquivo();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(arq);
+      a.download = arq.name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+
+    async compartilhar() {
+      const arq = await this.gerarArquivo();
+      if (navigator.canShare?.({ files: [arq] })) {
+        await navigator.share({ files: [arq], title: this.cfg.referencia }).catch(() => {});
+      } else {
+        // Computador sem compartilhamento de arquivos: baixa a imagem
+        this.baixar();
+      }
+    }
+  }
+  customElements.define('criar-story', CriarStory);
+</script>

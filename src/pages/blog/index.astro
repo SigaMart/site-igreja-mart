@@ -1,0 +1,36 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import TopoPagina from '../../components/TopoPagina.astro';
+import fotoTopo from '../../assets/fotos/mart/culto-atual.jpg';
+
+const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const migalhas = [{ nome: 'Blog', url: '/blog/' }];
+---
+<Base
+  titulo="Blog: fé, família e vida cotidiana"
+  descricao="Blog da Igreja MART: textos sobre família, trabalho, emoções, relacionamentos e vida cristã no dia a dia, à luz da Bíblia."
+  migalhas={migalhas}
+>
+  <TopoPagina etiqueta="Blog" titulo="Blog da" destaque="MART" texto="Textos sobre fé, família, trabalho e o dia a dia." migalhas={migalhas} foto={fotoTopo} fotoAlt="Membros da igreja reunidos em um culto" />
+
+  <section class="container-site py-16">
+    <ul class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {posts.map((p, i) => (
+        <li class:list={['card group overflow-hidden', i === 0 && 'lg:col-span-2']}>
+          <a href={`/blog/${p.id}/`} class:list={['grid h-full', i === 0 && 'lg:grid-cols-2']}>
+            <Image src={p.data.imagem} alt={p.data.imagemAlt} widths={[400, 800]} sizes="(min-width: 1024px) 400px, 100vw" class="aspect-[16/10] h-full w-full object-cover" />
+            <div class="flex flex-col p-6">
+              <p class="text-sm font-bold tracking-wider text-laranja-700 uppercase">{p.data.categoria}</p>
+              <h2 class:list={['mt-2 font-extrabold leading-snug group-hover:text-laranja-700', i === 0 ? 'text-2xl' : 'text-lg']}>{p.data.titulo}</h2>
+              <p class="mt-2 flex-1 text-sm text-tinta-suave">{p.data.descricao}</p>
+              <p class="mt-4 text-sm text-tinta-suave">{dataBR(p.data.data)}</p>
+            </div>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</Base>

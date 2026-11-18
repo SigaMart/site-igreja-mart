@@ -1,0 +1,95 @@
+---
+import Base from '../../../layouts/Base.astro';
+import Icone from '../../../components/Icone.astro';
+import CriarStory from '../../../components/CriarStory.astro';
+import { livros, urlCapitulo } from '../../../lib/referencia';
+import { capitulo } from '../../../lib/biblia';
+import { CREDITO_BIBLIA } from '../../../config/site';
+
+export function getStaticPaths() {
+  return livros.flatMap((l, li) =>
+    Array.from({ length: l.caps }, (_, i) => {
+      const cap = i + 1;
+      const ant = cap > 1 ? { slug: l.slug, cap: cap - 1, nome: l.nome } : li > 0 ? { slug: livros[li - 1].slug, cap: livros[li - 1].caps, nome: livros[li - 1].nome } : null;
+      const prox = cap < l.caps ? { slug: l.slug, cap: cap + 1, nome: l.nome } : li < livros.length - 1 ? { slug: livros[li + 1].slug, cap: 1, nome: livros[li + 1].nome } : null;
+      return { params: { livro: l.slug, capitulo: String(cap) }, props: { l, cap, ant, prox } };
+    }),
+  );
+}
+const { l, cap, ant, prox } = Astro.props;
+const versos = capitulo(l.slug, cap);
+const titulo = `${l.nome} ${cap}`;
+const migalhas = [{ nome: 'Bíblia', url: '/biblia/' }, { nome: l.nome, url: `/biblia/${l.slug}/` }, { nome: titulo, url: urlCapitulo(l.slug, cap) }];
+---
+<Base
+  titulo={`${titulo} – Bíblia Livre (Almeida) | Bíblia online`}
+  descricao={`${titulo}: ${versos[0].slice(0, 120)}… Leia o capítulo completo na Bíblia online da Igreja MART.`}
+  migalhas={migalhas}
+>
+  <article class="container-site max-w-3xl py-12">
+    <nav aria-label="Você está em" class="text-sm text-tinta-suave">
+      <a href="/biblia/" class="hover:text-laranja-700">Bíblia</a> / <a href={`/biblia/${l.slug}/`} class="hover:text-laranja-700">{l.nome}</a>
+    </nav>
+    <div class="mt-6 flex flex-wrap items-end justify-between gap-4">
+      <h1 class="titulo">{l.nome} <span class="destaque">{cap}</span></h1>
+      <a href="/biblia/" class="btn btn-contorno py-2"><Icone nome="busca" class="size-4" /> Pesquisar</a>
+    </div>
+    <p class="mt-2 text-sm text-tinta-suave">Bíblia Livre · Toque em um versículo para copiar ou compartilhar.</p>
+
+    <ol class="mt-10 space-y-1 text-lg leading-relaxed" id="versos">
+      {versos.map((t, i) => (
+        <li id={`v${i + 1}`} data-v={i + 1} class="group -mx-3 scroll-mt-28 cursor-pointer rounded-xl px-3 py-1.5 transition hover:bg-laranja-50 aria-selected:bg-laranja-100">
+          <sup class="mr-1.5 font-sans text-sm font-bold text-laranja-700">{i + 1}</sup>{t}
+        </li>
+      ))}
+    </ol>
+
+    <nav aria-label="Capítulos" class="mt-12 grid gap-4 sm:grid-cols-2">
+      {ant ? <a href={urlCapitulo(ant.slug, ant.cap)} class="card group p-5"><span class="flex items-center gap-1 text-sm font-semibold text-tinta-suave"><Icone nome="setaEsq" class="size-3" /> Anterior</span><span class="mt-1 block font-bold group-hover:text-laranja-700">{ant.nome} {ant.cap}</span></a> : <span />}
+      {prox && <a href={urlCapitulo(prox.slug, prox.cap)} class="card group p-5 text-right"><span class="flex items-center justify-end gap-1 text-sm font-semibold text-tinta-suave">Próximo <Icone nome="seta" class="size-3" /></span><span class="mt-1 block font-bold group-hover:text-laranja-700">{prox.nome} {prox.cap}</span></a>}
+    </nav>
+    <p class="mt-10 text-sm text-tinta-suave">{CREDITO_BIBLIA}</p>
+  </article>
+
+  <div id="barra" hidden class="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-w-xl flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl bg-tinta p-3 pl-4 text-white shadow-2xl lg:bottom-4">
+    <span id="barra-ref" class="text-sm font-bold"></span>
+    <span class="flex flex-wrap gap-2">
+      <button id="b-copiar" type="button" class="btn bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20"><Icone nome="copiar" class="size-4" /> <span>Copiar</span></button>
+      <a id="b-whats" href="#" target="_blank" rel="noopener" class="btn bg-[#25d366] px-3 py-2 text-sm text-tinta"><Icone nome="whatsapp" class="size-4" /> WhatsApp</a>
+      <button id="b-stories" type="button" class="btn btn-primario px-3 py-2 text-sm"><Icone nome="estrela" class="size-4" /> Stories</button>
+    </span>
+  </div>
+  <CriarStory semBotao nome="biblia" />
+</Base>
+
+<script define:vars={{ nomeLivro: l.nome, cap }}>
+  const lista = document.getElementById('versos');
+  const barra = document.getElementById('barra');
+  const sel = new Set();
+  const atualizar = () => {
+    lista.querySelectorAll('li').forEach((li) => li.setAttribute('aria-selected', sel.has(+li.dataset.v) ? 'true' : 'false'));
+    if (!sel.size) { barra.hidden = true; return; }
+    const nums = [...sel].sort((a, b) => a - b);
+    const faixa = nums.length > 1 && nums[nums.length - 1] - nums[0] === nums.length - 1 ? `${nums[0]}-${nums[nums.length - 1]}` : nums.join(',');
+    const ref = `${nomeLivro} ${cap}:${faixa}`;
+    const texto = nums.map((n) => document.getElementById('v' + n).lastChild.textContent.trim()).join(' ');
+    const msg = `“${texto}”\n${ref}\n\n${location.origin}${location.pathname}#v${nums[0]}`;
+    document.getElementById('barra-ref').textContent = ref;
+    document.getElementById('b-whats').href = 'https://wa.me/?text=' + encodeURIComponent('📖 ' + msg);
+    document.getElementById('b-stories').onclick = () => document.querySelector('criar-story[data-nome=biblia]').abrirCom(texto, ref);
+    document.getElementById('b-copiar').onclick = async (e) => {
+      try { await navigator.clipboard.writeText(msg); e.currentTarget.querySelector('span').textContent = 'Copiado!'; } catch {}
+    };
+    barra.hidden = false;
+  };
+  lista.addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-v]');
+    if (!li) return;
+    const v = +li.dataset.v;
+    sel.has(v) ? sel.delete(v) : sel.add(v);
+    atualizar();
+  });
+  // Destaca o versículo vindo de um link (#v16)
+  const m = location.hash.match(/^#v(\d+)$/);
+  if (m) { sel.add(+m[1]); atualizar(); }
+</script>

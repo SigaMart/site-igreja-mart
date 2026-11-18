@@ -1,0 +1,238 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+import Base from '../layouts/Base.astro';
+import TopoPagina from '../components/TopoPagina.astro';
+import Perguntas from '../components/Perguntas.astro';
+import Icone from '../components/Icone.astro';
+import { passagem } from '../lib/biblia';
+import { FAQ } from '../lib/faq';
+import { schemaFaq } from '../lib/schema';
+import fotoTopo from '../assets/fotos/mart/pregacao.jpg';
+import fotoOracao from '../assets/fotos/mart/reunidos.jpg';
+import fInicio from '../assets/fotos/mart/inicio.jpg';
+import fLouvorAntigo from '../assets/fotos/mart/louvor-antigo.jpg';
+import fConfra from '../assets/fotos/mart/confraternizacao.jpg';
+import fAtual from '../assets/fotos/mart/culto-atual.jpg';
+import fCongregacao from '../assets/fotos/mart/congregacao.jpg';
+
+// LINHA DO TEMPO da igreja.
+// Para colocar o ano de cada fase, preencha o campo `ano` (ex.: ano: '2009').
+// Sem ano, aparece só o nome da fase.
+const LINHA: { ano?: string; fase: string; titulo: string; texto: string[]; verso: string; foto: ImageMetadata; fotoAlt: string }[] = [
+  {
+    fase: 'O começo',
+    titulo: 'Poucas pessoas e uma grande fé',
+    texto: [
+      'A MART nasceu pequena: um grupo de pessoas reunidas para orar, louvar e abrir a Bíblia juntas.',
+      'Não tinha estrutura nem holofote. Tinha gente que acreditava que Deus estava no meio deles.',
+    ],
+    verso: 'Mateus 18:20',
+    foto: fInicio,
+    fotoAlt: 'Um dos primeiros cultos da Igreja MART',
+  },
+  {
+    fase: 'O nome',
+    titulo: 'Restauração do Templo',
+    texto: [
+      'MART é a sigla de Ministério Apostólico Restauração do Templo.',
+      'Na Bíblia, Deus prometeu reconstruir o templo de Jerusalém com uma glória ainda maior. Hoje o templo de Deus somos nós. Por isso cremos que Ele continua restaurando vidas, famílias e histórias.',
+    ],
+    verso: 'Ageu 2:9',
+    foto: fLouvorAntigo,
+    fotoAlt: 'Louvor em um culto nos primeiros anos da MART',
+  },
+  {
+    fase: 'Crescendo juntos',
+    titulo: 'De um grupo a uma família',
+    texto: [
+      'Vieram os ministérios, as celebrações, as festas e muitas mesas compartilhadas.',
+      'Cada pessoa que chegou trouxe sua história, e fomos aprendendo a cuidar uns dos outros como família.',
+    ],
+    verso: 'Atos 2:42',
+    foto: fConfra,
+    fotoAlt: 'Confraternização da igreja com muita alegria',
+  },
+  {
+    fase: 'Hoje',
+    titulo: 'Uma casa de portas abertas',
+    texto: [
+      'Hoje nos reunimos na Av. Conde Francisco Matarazzo, 557, no bairro Fundação, em São Caetano do Sul, aos domingos, terças e quartas.',
+      'Continuamos com a mesma convicção do começo: quem está em Cristo é nova criatura, e todas as promessas de Deus nele são “sim”.',
+    ],
+    verso: '2 Coríntios 5:17',
+    foto: fAtual,
+    fotoAlt: 'Igreja reunida em um culto atual da MART',
+  },
+  {
+    fase: 'Daqui pra frente',
+    titulo: 'Ide e pregai',
+    texto: [
+      'Nossa história não termina aqui. Jesus nos enviou a levar o evangelho a toda criatura, começando pela nossa rua, nosso bairro e nossa cidade.',
+      'E o próximo capítulo pode ter você nele.',
+    ],
+    verso: 'Marcos 16:15',
+    foto: fCongregacao,
+    fotoAlt: 'Igreja reunida em louvor',
+  },
+];
+
+// Declaração de fé resumida. Revisar com a liderança.
+const CREMOS: { icone: 'livro' | 'chama' | 'cruz' | 'broto' | 'arcoiris' | 'globo'; t: string; d: string; ref: string }[] = [
+  { icone: 'livro', t: 'Na Bíblia', d: 'A Bíblia é a Palavra de Deus, inspirada e suficiente para guiar a nossa fé e a nossa vida.', ref: '2 Timóteo 3:16' },
+  { icone: 'chama', t: 'Em Deus Pai, Filho e Espírito Santo', d: 'Um só Deus em três pessoas. O Espírito Santo habita em quem crê, consola, transforma e capacita.', ref: 'Mateus 28:19' },
+  { icone: 'cruz', t: 'Em Jesus Cristo', d: 'Jesus morreu por nós e ressuscitou. A salvação é um presente de Deus, recebido pela fé nele.', ref: 'João 14:6' },
+  { icone: 'broto', t: 'Na vida em Cristo', d: 'Estar em Cristo muda tudo: Ele é a videira e nós os ramos. Longe dele nada podemos; nele damos fruto.', ref: 'João 15:5' },
+  { icone: 'arcoiris', t: 'Nas promessas de Deus', d: 'Deus não falha com a sua palavra. Todas as promessas dele se cumprem em Jesus, também na sua vida.', ref: '2 Coríntios 1:20' },
+  { icone: 'globo', t: 'Na Igreja e na missão', d: 'A Igreja é a família de Deus, enviada para anunciar o evangelho a toda criatura e cuidar das pessoas.', ref: 'Marcos 16:15' },
+];
+const migalhas = [{ nome: 'Sobre', url: '/sobre/' }];
+---
+<Base
+  titulo="Sobre a Igreja MART: nossa história e no que cremos"
+  descricao="Conheça a história da Igreja MART, Ministério Apostólico Restauração do Templo, em São Caetano do Sul: do começo até hoje, o que significa MART e no que cremos."
+  migalhas={migalhas}
+  jsonLd={[schemaFaq(FAQ.slice(2, 4))]}
+>
+  <TopoPagina etiqueta="Nossa história" titulo="Conheça a" destaque="Igreja MART" texto="Uma família de portas abertas no bairro Fundação, em São Caetano do Sul, para quem quer conhecer a Deus e recomeçar." migalhas={migalhas} foto={fotoTopo} fotoAlt="Pastor pregando para a igreja reunida no templo da MART" posicao="center 40%" />
+
+  <!-- LINHA DO TEMPO -->
+  <section class="container-site py-16 sm:py-20" aria-labelledby="t-historia">
+    <div class="mx-auto max-w-2xl text-center">
+      <span class="eyebrow">Linha do tempo</span>
+      <h2 id="t-historia" class="titulo mt-4">Como Deus escreveu <span class="destaque">a nossa história</span></h2>
+    </div>
+
+    <ol class="linha-tempo relative mx-auto mt-14 max-w-5xl">
+      {LINHA.map((m, i) => {
+        const v = passagem(m.verso);
+        v.texto = v.texto.replace(/^E disse-lhes:\s*/, '');
+        const par = i % 2 === 1;
+        return (
+          <li class="marco relative grid gap-6 pb-14 pl-12 last:pb-0 md:grid-cols-2 md:gap-14 md:pl-0">
+            <!-- ponto na linha -->
+            <span class="absolute top-1 left-0 z-10 flex size-8 items-center justify-center rounded-full bg-laranja-500 text-sm font-extrabold ring-8 ring-creme md:left-1/2 md:-translate-x-1/2">{i + 1}</span>
+
+            <div class:list={['md:pt-0', par ? 'md:order-2 md:pl-2' : 'md:pr-2 md:text-right']}>
+              <p class="text-sm font-bold tracking-[0.14em] text-laranja-700 uppercase">{m.ano ? `${m.ano} · ${m.fase}` : m.fase}</p>
+              <h3 class="mt-2 text-2xl font-extrabold tracking-tight">{m.titulo}</h3>
+              {m.texto.map((t) => <p class="mt-3 text-tinta-suave">{t}</p>)}
+              <figure class:list={['mt-5 rounded-2xl bg-laranja-50 p-5 text-left', par ? '' : 'md:ml-auto']}>
+                <blockquote class="verso text-lg leading-snug">“{v.texto}”</blockquote>
+                <figcaption class="mt-2 text-sm font-bold"><a href={v.url} class="text-laranja-700 hover:underline">{v.referencia}</a></figcaption>
+              </figure>
+            </div>
+            <div class:list={[par ? 'md:order-1 md:pr-2' : 'md:pl-2']}>
+              <Image src={m.foto} alt={m.fotoAlt} widths={[400, 700]} sizes="(min-width: 768px) 460px, 100vw" class="aspect-[4/3] w-full rounded-3xl object-cover shadow-lg shadow-tinta/10" />
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  </section>
+
+  <!-- MISSÃO -->
+  <section class="bg-areia py-20">
+    <div class="container-site">
+      <div class="max-w-2xl">
+        <span class="eyebrow">Nossa missão</span>
+        <h2 class="titulo mt-4">Uma <span class="destaque">casa</span> de portas abertas</h2>
+        <p class="mt-4 text-base text-tinta-suave sm:text-lg">Nossa logo é uma casa, e é isso que queremos ser: um lugar onde as pessoas são recebidas, cuidadas e ajudadas a construir a vida sobre a rocha, que é Cristo.</p>
+      </div>
+      <ul class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          ['coracao', 'Acolher', 'Receber cada pessoa como ela é, com amor e sem julgamento.'],
+          ['livro', 'Ensinar', 'Anunciar a Palavra de Deus de forma fiel, simples e aplicada à vida real.'],
+          ['restaurar', 'Restaurar', 'Caminhar junto de quem precisa de cura, perdão e um novo começo.'],
+          ['enviar', 'Enviar', 'Ir e pregar o evangelho: levar o amor de Jesus para casa, trabalho e cidade.'],
+        ].map(([ic, t, d]) => (
+          <li class="rounded-3xl bg-white p-6">
+            <span class="flex size-12 items-center justify-center rounded-2xl bg-laranja-500 text-tinta"><Icone nome={ic as any} class="size-6" /></span>
+            <strong class="mt-4 block text-lg">{t}</strong>
+            <span class="mt-1 block text-tinta-suave">{d}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- NO QUE CREMOS -->
+  <section class="container-site py-20" aria-labelledby="t-cremos">
+    <div class="max-w-2xl">
+      <span class="eyebrow">Declaração de fé</span>
+      <h2 id="t-cremos" class="titulo mt-4">No que <span class="destaque">cremos</span></h2>
+      <p class="mt-4 text-base text-tinta-suave sm:text-lg">Estas são as verdades da Bíblia que sustentam a nossa fé.</p>
+    </div>
+    <ul class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {CREMOS.map((c) => {
+        const p = passagem(c.ref);
+        return (
+          <li class="card flex flex-col p-6">
+            <span class="flex size-12 items-center justify-center rounded-2xl bg-laranja-100 text-laranja-700"><Icone nome={c.icone} class="size-6" /></span>
+            <h3 class="mt-4 text-lg font-extrabold">{c.t}</h3>
+            <p class="mt-2 flex-1 text-tinta-suave">{c.d}</p>
+            <a href={p.url} class="mt-4 text-sm font-bold text-laranja-700 hover:underline">{p.referencia}</a>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+
+  <section class="container-site">
+    <div class="relative overflow-hidden rounded-[2rem]">
+      <Image src={fotoOracao} alt="Irmãos de mãos dadas orando durante um culto na MART" widths={[600, 1200]} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" />
+      <div class="absolute inset-0 bg-gradient-to-r from-tinta/90 to-tinta/40"></div>
+      <div class="relative max-w-xl p-10 text-white sm:p-14">
+        <h2 class="text-3xl font-extrabold tracking-tight">Venha fazer parte desta família</h2>
+        <p class="mt-3 text-white/80">Os cultos são abertos a todos. Chegue um pouco antes e fale com a gente na entrada.</p>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="/cultos/" class="btn btn-primario">Horários dos cultos</a>
+          <a href="/ministerios/" class="btn bg-white/10 text-white hover:bg-white/20">Conheça os ministérios</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="container-site mt-20 max-w-3xl">
+    <h2 class="text-2xl font-extrabold">Perguntas sobre a igreja</h2>
+    <div class="mt-6"><Perguntas itens={FAQ.slice(2, 4)} /></div>
+  </section>
+</Base>
+
+<style>
+  /* Linha vertical: à esquerda no celular, no centro no computador */
+  .linha-tempo::before {
+    content: '';
+    position: absolute;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    left: 1rem;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--color-laranja-300), var(--color-laranja-500) 60%, var(--color-laranja-200));
+    transform: translateX(-50%);
+  }
+  @media (min-width: 768px) {
+    .linha-tempo::before {
+      left: 50%;
+    }
+  }
+  /* Entrada suave ao rolar */
+  @supports (animation-timeline: view()) {
+    .marco {
+      animation: marco-entrar linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    @keyframes marco-entrar {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marco {
+      animation: none;
+    }
+  }
+</style>

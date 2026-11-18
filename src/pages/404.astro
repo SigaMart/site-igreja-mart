@@ -1,0 +1,17 @@
+---
+import Base from '../layouts/Base.astro';
+import { passagem } from '../lib/biblia';
+const v = passagem('Lucas 15:6');
+---
+<Base titulo="Página não encontrada" semIndex>
+  <section class="container-site max-w-2xl py-28 text-center">
+    <p class="text-7xl font-extrabold text-laranja-500">404</p>
+    <h1 class="titulo mt-4">Essa página se perdeu…</h1>
+    <p class="verso mt-6 text-xl text-tinta-suave">“{v.texto}”</p>
+    <p class="mt-2 text-sm font-bold text-laranja-700">{v.referencia}</p>
+    <div class="mt-10 flex flex-wrap justify-center gap-3">
+      <a href="/" class="btn btn-primario">Voltar ao início</a>
+      <a href="/biblia/" class="btn btn-contorno">Pesquisar na Bíblia</a>
+    </div>
+  </section>
+</Base>

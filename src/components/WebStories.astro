@@ -1,0 +1,195 @@
+---
+// Web Stories da MART: bolinha flutuante (arrastável e minimizável) que abre os stories em tela cheia.
+// Para mudar o conteúdo, edite a lista STORIES abaixo.
+import '../styles/stories.css';
+import { getImage } from 'astro:assets';
+import { SITE, fmtHora, mapsLink } from '../config/site';
+import { passagem } from '../lib/biblia';
+import type { Story } from '../scripts/stories/tipos';
+
+import adoracao from '../assets/fotos/mart/adoracao.jpg';
+import reunidos from '../assets/fotos/mart/reunidos.jpg';
+import congregacao from '../assets/fotos/mart/congregacao.jpg';
+import louvor from '../assets/fotos/mart/louvor.jpg';
+import cultoAtual from '../assets/fotos/mart/culto-atual.jpg';
+import pregacao from '../assets/fotos/mart/pregacao.jpg';
+import adoracao2 from '../assets/fotos/mart/adoracao2.jpg';
+import natureza1 from '../assets/fotos/natureza/paisagem-1.jpg';
+import natureza4 from '../assets/fotos/natureza/paisagem-4.jpg';
+import natureza7 from '../assets/fotos/natureza/paisagem-7.jpg';
+
+const foto = async (src: ImageMetadata) => (await getImage({ src, width: 1080, format: 'webp', quality: 78 })).src;
+const capa = async (src: ImageMetadata) => (await getImage({ src, width: 200, height: 200, fit: 'cover', format: 'webp' })).src;
+
+const verso = (ref: string, limpar?: RegExp) => {
+  const p = passagem(ref);
+  return { texto: limpar ? p.texto.replace(limpar, '') : p.texto, referencia: p.referencia };
+};
+
+const fotosCultos = [congregacao, louvor, cultoAtual];
+
+const STORIES: Story[] = [
+  {
+    id: 'boas-vindas',
+    titulo: 'Boas-vindas',
+    capa: await capa(adoracao),
+    slides: [
+      { foto: await foto(adoracao), eyebrow: 'Igreja MART', titulo: 'Que bom ter você aqui.', texto: 'Aqui ninguém precisa chegar pronto.' },
+      { foto: await foto(reunidos), titulo: 'Você vai ser recebido pelo nome.', texto: 'Na porta sempre tem alguém esperando para te dar boas-vindas.' },
+      {
+        fundo: 'linear-gradient(160deg, #fff6ea 0%, #ffe2bd 100%)', cor: '#2a1d16', vpos: 'center',
+        eyebrow: 'Neste domingo', titulo: 'Vem com a gente?', texto: `Culto da Família, às ${fmtHora(SITE.cultos[0].inicio)}. Pode chegar do jeito que você está.`,
+        botao: { rotulo: 'Ver horários', href: '/cultos/' },
+      },
+    ],
+  },
+  {
+    id: 'cultos',
+    titulo: 'Nossos cultos',
+    capa: await capa(congregacao),
+    slides: [
+      ...(await Promise.all(SITE.cultos.map(async (c, i) => ({
+        foto: await foto(fotosCultos[i % fotosCultos.length]),
+        escurecer: 45,
+        eyebrow: c.diaNome,
+        titulo: `${fmtHora(c.inicio)} às ${fmtHora(c.fim)}`,
+        texto: `${c.nome}. ${c.descricao}`,
+      })))),
+      {
+        fundo: 'linear-gradient(160deg, #ffb347 0%, #fb8300 55%, #c25a00 100%)', cor: '#2a1d16', vpos: 'center',
+        eyebrow: 'Onde estamos', titulo: 'Bairro Fundação, São Caetano do Sul', texto: SITE.endereco.rua,
+        botao: { rotulo: 'Como chegar', href: mapsLink },
+      },
+    ],
+  },
+  {
+    id: 'palavra',
+    titulo: 'Palavra',
+    capa: await capa(natureza4),
+    slides: [
+      { foto: await foto(natureza1), escurecer: 40, vpos: 'center', alinhar: 'center', eyebrow: 'Ide e pregai', verso: verso('Marcos 16:15', /^E disse-lhes:\s*/), duracao: 8 },
+      { foto: await foto(natureza4), escurecer: 40, vpos: 'center', alinhar: 'center', eyebrow: 'Promessa', verso: verso('2 Coríntios 1:20'), duracao: 8 },
+      {
+        foto: await foto(natureza7), escurecer: 40, vpos: 'center', alinhar: 'center', eyebrow: 'Em Cristo', verso: verso('João 15:5'), duracao: 8,
+        botao: { rotulo: 'Ler os devocionais', href: '/devocionais/' },
+      },
+    ],
+  },
+  {
+    id: 'oracao',
+    titulo: 'Oração',
+    capa: await capa(adoracao2),
+    slides: [
+      { foto: await foto(pregacao), escurecer: 45, titulo: 'Está passando por algo difícil?', texto: 'Você não precisa carregar isso sozinho.' },
+      {
+        foto: await foto(adoracao2), escurecer: 50, eyebrow: 'Pedido de oração', titulo: 'A gente ora por você.',
+        texto: 'Conte o que está no seu coração. Ninguém vai te julgar.',
+        botao: { rotulo: 'Pedir oração', href: '/oracao/' },
+      },
+    ],
+  },
+];
+---
+<div class="ms-float" id="ms-stories" data-stories={JSON.stringify(STORIES)} hidden>
+  <button class="ms-circle" type="button" aria-label="Abrir os stories da Igreja MART"><i></i></button>
+  <button class="ms-min" type="button" aria-label="Minimizar os stories">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+  <span class="ms-count" aria-hidden="true"></span>
+  <button class="ms-pill" type="button" aria-label="Mostrar os stories"><span><i></i></span>Stories</button>
+</div>
+
+<script>
+  import { abrirPlayer, storiesVistos } from '../scripts/stories/player';
+  import { aplicarCapa } from '../scripts/stories/render';
+  import type { Story } from '../scripts/stories/tipos';
+
+  const flutuante = document.getElementById('ms-stories') as HTMLElement;
+  const stories: Story[] = JSON.parse(flutuante.dataset.stories || '[]');
+
+  if (stories.length) {
+    const circulo = flutuante.querySelector('.ms-circle') as HTMLButtonElement;
+    const anel = circulo.querySelector('i') as HTMLElement;
+    const contador = flutuante.querySelector('.ms-count') as HTMLElement;
+    const pilula = flutuante.querySelector('.ms-pill') as HTMLButtonElement;
+    const miniPilula = pilula.querySelector('i') as HTMLElement;
+    const btnMin = flutuante.querySelector('.ms-min') as HTMLButtonElement;
+    const POS = 'mart_stories_pos', MIN = 'mart_stories_min';
+    const guardar = {
+      ler: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+      gravar: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ok */ } },
+    };
+
+    const atualizar = () => {
+      const vistos = storiesVistos();
+      const novo = stories.findIndex((s) => !vistos.includes(s.id));
+      const primeiro = stories[novo >= 0 ? novo : 0];
+      aplicarCapa(anel, primeiro.capa);
+      aplicarCapa(miniPilula, primeiro.capa);
+      flutuante.classList.toggle('vistos', novo < 0);
+      const naoVistos = stories.filter((s) => !vistos.includes(s.id)).length;
+      contador.textContent = String(naoVistos || stories.length);
+      return novo >= 0 ? novo : 0;
+    };
+    let inicio = atualizar();
+
+    // Posição: arrastável e lembrada entre as visitas (sem posição salva, fica no canto do CSS).
+    let pos: { x: number; y: number } | null = null;
+    const posicionar = () => {
+      if (!pos || !innerWidth || !innerHeight) return;
+      pos.x = Math.min(Math.max(8, pos.x), innerWidth - flutuante.offsetWidth - 8);
+      pos.y = Math.min(Math.max(8, pos.y), innerHeight - flutuante.offsetHeight - 8);
+      flutuante.style.left = `${pos.x}px`;
+      flutuante.style.top = `${pos.y}px`;
+      flutuante.style.bottom = 'auto';
+    };
+    const salvarPos = () => { if (pos && innerWidth && innerHeight) guardar.gravar(POS, JSON.stringify({ x: pos.x / innerWidth, y: pos.y / innerHeight })); };
+    const setMin = (min: boolean) => {
+      flutuante.classList.toggle('min', min);
+      guardar.gravar(MIN, min ? '1' : '0');
+      requestAnimationFrame(posicionar);
+    };
+
+    flutuante.hidden = false;
+    flutuante.classList.toggle('min', guardar.ler(MIN) === '1');
+    try {
+      const salvo = JSON.parse(guardar.ler(POS) || 'null');
+      if (salvo && innerWidth) { pos = { x: salvo.x * innerWidth, y: salvo.y * innerHeight }; posicionar(); }
+    } catch { /* usa o canto padrão */ }
+    addEventListener('resize', posicionar);
+    setTimeout(() => flutuante.classList.add('in'), 900);
+
+    const abrir = () => abrirPlayer(stories, inicio, () => { inicio = atualizar(); });
+
+    // Arrastar: só vira "arrasto" depois de mover 6px; senão é um toque normal.
+    let arrasto: { id: number; sx: number; sy: number; ox: number; oy: number; moveu: boolean } | null = null;
+    flutuante.addEventListener('pointerdown', (e) => {
+      if ((e.target as HTMLElement).closest('.ms-min')) return;
+      const r = flutuante.getBoundingClientRect();
+      arrasto = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moveu: false };
+      flutuante.setPointerCapture(e.pointerId);
+    });
+    flutuante.addEventListener('pointermove', (e) => {
+      if (!arrasto || e.pointerId !== arrasto.id) return;
+      const dx = e.clientX - arrasto.sx, dy = e.clientY - arrasto.sy;
+      if (!arrasto.moveu && Math.hypot(dx, dy) < 6) return;
+      arrasto.moveu = true;
+      flutuante.classList.add('arrastando');
+      pos = { x: arrasto.ox + dx, y: arrasto.oy + dy };
+      posicionar();
+    });
+    flutuante.addEventListener('pointerup', (e) => {
+      if (!arrasto || e.pointerId !== arrasto.id) return;
+      const foiArrasto = arrasto.moveu;
+      arrasto = null;
+      flutuante.classList.remove('arrastando');
+      if (foiArrasto) { salvarPos(); return; }
+      if (flutuante.classList.contains('min')) setMin(false);
+      else abrir();
+    });
+    flutuante.addEventListener('pointercancel', () => { arrasto = null; flutuante.classList.remove('arrastando'); });
+    circulo.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } });
+    pilula.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMin(false); } });
+    btnMin.addEventListener('click', (e) => { e.stopPropagation(); setMin(true); });
+  }
+</script>

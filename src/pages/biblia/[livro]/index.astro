@@ -1,0 +1,27 @@
+---
+import Base from '../../../layouts/Base.astro';
+import TopoPagina from '../../../components/TopoPagina.astro';
+import { livros, urlCapitulo } from '../../../lib/referencia';
+import { capitulo } from '../../../lib/biblia';
+
+export function getStaticPaths() {
+  return livros.map((l) => ({ params: { livro: l.slug }, props: { l } }));
+}
+const { l } = Astro.props;
+const primeiro = capitulo(l.slug, 1)[0];
+const migalhas = [{ nome: 'Bíblia', url: '/biblia/' }, { nome: l.nome, url: `/biblia/${l.slug}/` }];
+---
+<Base
+  titulo={`${l.nome}: leia todos os capítulos | Bíblia online`}
+  descricao={`Leia o livro de ${l.nome} online, com ${l.caps} capítulo${l.caps > 1 ? 's' : ''}, na Bíblia Livre (Almeida). ${primeiro.slice(0, 90)}…`}
+  migalhas={migalhas}
+>
+  <TopoPagina etiqueta={l.testamento === 'AT' ? 'Antigo Testamento' : 'Novo Testamento'} titulo={l.nome} texto={`${l.caps} capítulo${l.caps > 1 ? 's' : ''}. Escolha um para ler.`} migalhas={migalhas} />
+  <section class="container-site py-12">
+    <ul class="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12">
+      {Array.from({ length: l.caps }, (_, i) => (
+        <li><a href={urlCapitulo(l.slug, i + 1)} class="flex aspect-square items-center justify-center rounded-xl bg-white font-bold transition hover:bg-laranja-500" aria-label={`${l.nome} capítulo ${i + 1}`}>{i + 1}</a></li>
+      ))}
+    </ul>
+  </section>
+</Base>

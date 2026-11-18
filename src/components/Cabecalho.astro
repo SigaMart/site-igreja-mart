@@ -1,0 +1,120 @@
+---
+import { Image } from 'astro:assets';
+import { NAV, SITE, fmtHora } from '../config/site';
+import Icone from './Icone.astro';
+import logo from '../assets/logo/logo-clara.png';
+
+const atual = Astro.url.pathname;
+const ativo = (href: string) => atual.startsWith(href);
+
+// Itens do menu de tela cheia (celular)
+const MENU = [
+  { href: '/', label: 'Início', icone: 'casa' },
+  { href: '/sobre/', label: 'Sobre', icone: 'coracao' },
+  { href: '/cultos/', label: 'Cultos e agenda', icone: 'calendario' },
+  { href: '/ministerios/', label: 'Ministérios', icone: 'usuarios' },
+  { href: '/devocionais/', label: 'Devocionais', icone: 'sol' },
+  { href: '/blog/', label: 'Blog', icone: 'chat' },
+  { href: '/biblia/', label: 'Bíblia online', icone: 'livro' },
+  { href: '/oracao/', label: 'Pedido de oração', icone: 'maos' },
+  { href: '/contato/', label: 'Contato', icone: 'local' },
+] as const;
+const ativoMenu = (href: string) => (href === '/' ? atual === '/' : atual.startsWith(href));
+---
+<header class="sticky top-0 z-40 border-b border-tinta/5 bg-creme/85 backdrop-blur-md">
+  <div class="container-site flex h-18 items-center justify-between gap-4">
+    <a href="/" class="flex items-center gap-3" aria-label="Igreja MART, página inicial">
+      <Image src={logo} alt="" width={96} height={88} class="h-11 w-auto" loading="eager" />
+      <span class="leading-tight">
+        <span class="block text-base font-extrabold tracking-tight">Igreja MART</span>
+        <span class="block text-xs font-medium text-tinta-suave">Restauração do Templo</span>
+      </span>
+    </a>
+
+    <nav aria-label="Principal" class="hidden lg:block">
+      <ul class="flex items-center gap-1">
+        {NAV.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              class:list={[
+                'rounded-full px-3 py-2 text-sm font-semibold transition hover:text-laranja-700',
+                ativo(item.href) ? 'text-laranja-700' : 'text-tinta/80',
+              ]}
+              aria-current={ativo(item.href) ? 'page' : undefined}
+            >{item.label}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="flex items-center gap-2">
+      <a href="/cultos/#primeira-visita" class="btn btn-primario hidden sm:inline-flex">Quero visitar</a>
+      <button type="button" data-abrir-menu class="flex size-11 items-center justify-center rounded-full border border-tinta/10 bg-white lg:hidden" aria-label="Abrir menu" aria-haspopup="dialog" aria-controls="menu-mobile">
+        <Icone nome="menu" class="size-5" />
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Menu de tela cheia (celular e tablet) -->
+<dialog id="menu-mobile" aria-label="Menu" class="menu-tela-cheia m-0 h-dvh max-h-none w-full max-w-none bg-creme p-0 text-tinta lg:hidden">
+  <div class="flex h-full flex-col">
+    <div class="relative overflow-hidden bg-tinta text-white">
+      <div class="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-laranja-500/35 blur-3xl"></div>
+      <div class="container-site relative flex h-18 items-center justify-between">
+        <span class="flex items-center gap-3">
+          <span class="flex size-11 items-center justify-center rounded-2xl bg-white"><Image src={logo} alt="" width={96} height={88} class="h-8 w-auto" /></span>
+          <span class="leading-tight">
+            <span class="block font-extrabold">Igreja MART</span>
+            <span class="block text-xs text-white/60">Restauração do Templo</span>
+          </span>
+        </span>
+        <button type="button" data-fechar-menu class="flex size-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20" aria-label="Fechar menu">
+          <Icone nome="fechar" class="size-5" />
+        </button>
+      </div>
+      <div class="container-site relative pt-2 pb-6">
+        <p class="text-xs font-bold tracking-[0.14em] text-laranja-300 uppercase">Cultos</p>
+        <ul class="mt-2 flex flex-wrap gap-2 text-sm">
+          {SITE.cultos.map((c) => <li class="rounded-full bg-white/10 px-3 py-1.5">{c.diaNome.split('-')[0]} <strong class="font-bold">{fmtHora(c.inicio)}</strong></li>)}
+        </ul>
+      </div>
+    </div>
+
+    <nav aria-label="Menu" class="container-site flex-1 overflow-y-auto py-4">
+      <ul class="divide-y divide-tinta/5">
+        {MENU.map((item) => (
+          <li>
+            <a href={item.href} aria-current={ativoMenu(item.href) ? 'page' : undefined} class:list={['group flex items-center gap-3 py-2.5 text-base font-semibold', ativoMenu(item.href) ? 'text-laranja-700' : 'text-tinta']}>
+              <span class:list={['flex size-8 items-center justify-center rounded-lg', ativoMenu(item.href) ? 'bg-laranja-500 text-tinta' : 'bg-laranja-100 text-laranja-700']}><Icone nome={item.icone} class="size-4" /></span>
+              <span class="flex-1">{item.label}</span>
+              <Icone nome="seta" class="size-4 text-tinta/25 transition group-hover:translate-x-1 group-hover:text-laranja-600" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <div class="container-site border-t border-tinta/5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <a href="/cultos/#primeira-visita" class="btn btn-primario w-full">Quero visitar</a>
+      <div class="mt-4 flex items-center justify-between gap-3 text-sm text-tinta-suave">
+        <span>Fundação · São Caetano do Sul</span>
+        <span class="flex gap-2">
+          <a href={SITE.redes.instagram} target="_blank" rel="noopener" aria-label="Instagram" class="flex size-9 items-center justify-center rounded-full bg-white"><Icone nome="instagram" class="size-4" /></a>
+          <a href={SITE.redes.facebook} target="_blank" rel="noopener" aria-label="Facebook" class="flex size-9 items-center justify-center rounded-full bg-white"><Icone nome="facebook" class="size-4" /></a>
+        </span>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  const menu = document.getElementById('menu-mobile') as HTMLDialogElement;
+  document.querySelectorAll('[data-abrir-menu]').forEach((b) => b.addEventListener('click', () => menu.showModal()));
+  menu.querySelector('[data-fechar-menu]')!.addEventListener('click', () => menu.close());
+  // Fecha ao tocar num link (inclusive âncoras na mesma página)
+  menu.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => menu.close()));
+  // Se a tela crescer para desktop com o menu aberto, fecha
+  matchMedia('(min-width: 1024px)').addEventListener('change', (e) => e.matches && menu.close());
+</script>

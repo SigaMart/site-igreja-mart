@@ -1,0 +1,79 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import TopoPagina from '../components/TopoPagina.astro';
+import HorariosCultos from '../components/HorariosCultos.astro';
+import Perguntas from '../components/Perguntas.astro';
+import Icone from '../components/Icone.astro';
+import { SITE, enderecoCompleto, mapsLink } from '../config/site';
+import { FAQ } from '../lib/faq';
+import { schemaFaq } from '../lib/schema';
+import fotoTopo from '../assets/fotos/mart/congregacao.jpg';
+import fotoLouvor from '../assets/fotos/mart/louvor.jpg';
+
+const migalhas = [{ nome: 'Cultos e agenda', url: '/cultos/' }];
+const passos = [
+  { i: 'relogio', t: 'Chegue 10 minutos antes', d: 'Assim dá tempo de estacionar, conhecer o espaço e escolher um lugar com calma.' },
+  { i: 'usuarios', t: 'Nossa recepção te recebe', d: 'Uma pessoa da equipe vai te dar boas-vindas e tirar qualquer dúvida.' },
+  { i: 'estrela', t: 'Crianças no MART Kids', d: 'Se vier com filhos, apresentamos o espaço infantil e a equipe que cuida deles.' },
+  { i: 'musica', t: 'Louvor, oração e Palavra', d: 'Participe no seu ritmo. Ninguém vai te pedir para fazer nada que você não queira.' },
+] as const;
+const faqCultos = [FAQ[1], FAQ[4], FAQ[5]];
+---
+<Base
+  titulo="Horários de culto em São Caetano do Sul"
+  descricao="Horários dos cultos da Igreja MART em São Caetano do Sul: domingo das 18h às 20h30, terça das 20h às 21h30 e quarta das 15h30 às 17h. Veja como é a primeira visita."
+  migalhas={migalhas}
+  jsonLd={[schemaFaq(faqCultos)]}
+>
+  <TopoPagina etiqueta="Cultos e agenda" titulo="Horários dos" destaque="cultos" texto="Domingo às 18h, terça às 20h e quarta às 15h30. Não precisa de inscrição: é só chegar." migalhas={migalhas} foto={fotoTopo} fotoAlt="Igreja reunida durante um culto na MART" />
+
+  <section class="container-site py-16">
+    <HorariosCultos />
+    <div class="mt-8 flex flex-col gap-4 rounded-3xl bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
+      <p class="flex items-start gap-3"><Icone nome="local" class="mt-0.5 size-5 shrink-0 text-laranja-600" /><span><strong>Endereço:</strong> {enderecoCompleto}</span></p>
+      <a href={mapsLink} target="_blank" rel="noopener" class="btn btn-escuro shrink-0">Como chegar</a>
+    </div>
+  </section>
+
+  <section id="primeira-visita" class="scroll-mt-24 bg-areia py-20">
+    <div class="container-site grid items-center gap-12 lg:grid-cols-2">
+      <div>
+        <span class="eyebrow">Primeira visita</span>
+        <h2 class="titulo mt-4">Vai nos visitar pela <span class="destaque">primeira vez?</span></h2>
+        <p class="mt-4 text-base text-tinta-suave sm:text-lg">Que alegria! Veja como funciona, para você chegar tranquilo.</p>
+        <ol class="mt-8 grid gap-4 sm:grid-cols-2">
+          {passos.map((p) => (
+            <li class="rounded-2xl bg-white p-5">
+              <span class="flex size-10 items-center justify-center rounded-xl bg-laranja-100 text-laranja-700"><Icone nome={p.i} /></span>
+              <strong class="mt-3 block">{p.t}</strong>
+              <span class="mt-1 block text-sm text-tinta-suave">{p.d}</span>
+            </li>
+          ))}
+        </ol>
+        <a href="/blog/primeira-vez-na-igreja/" class="mt-6 inline-flex items-center gap-2 font-bold text-laranja-700 hover:underline">Leia o guia completo da primeira visita <Icone nome="seta" class="size-4" /></a>
+      </div>
+      <Image src={fotoLouvor} alt="Momento de louvor em um culto da MART" widths={[480, 900]} sizes="(min-width: 1024px) 540px, 100vw" class="aspect-[4/5] w-full rounded-[2rem] object-cover" />
+    </div>
+  </section>
+
+  <section id="agenda" class="container-site scroll-mt-24 py-20">
+    <span class="eyebrow">Agenda</span>
+    <h2 class="titulo mt-4">Eventos <span class="destaque">especiais</span></h2>
+    <div class="card mt-8 flex flex-col items-start gap-5 p-8 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-start gap-4">
+        <span class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-laranja-500"><Icone nome="calendario" /></span>
+        <div>
+          <p class="text-lg font-extrabold">Conferências, encontros e datas especiais</p>
+          <p class="mt-1 text-tinta-suave">A programação de eventos é divulgada no nosso Instagram. Siga para não perder nada.</p>
+        </div>
+      </div>
+      <a href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn btn-primario shrink-0"><Icone nome="instagram" class="size-4" /> {SITE.instagramUsuario}</a>
+    </div>
+  </section>
+
+  <section class="container-site max-w-3xl">
+    <h2 class="text-2xl font-extrabold">Dúvidas sobre os cultos</h2>
+    <div class="mt-6"><Perguntas itens={faqCultos} /></div>
+  </section>
+</Base>

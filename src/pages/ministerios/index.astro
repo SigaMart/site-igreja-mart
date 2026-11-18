@@ -1,0 +1,36 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import TopoPagina from '../../components/TopoPagina.astro';
+import fotoTopo from '../../assets/fotos/mart/danca.jpg';
+import Icone from '../../components/Icone.astro';
+
+const ministerios = (await getCollection('ministerios')).sort((a, b) => a.data.ordem - b.data.ordem);
+const migalhas = [{ nome: 'Ministérios', url: '/ministerios/' }];
+---
+<Base
+  titulo="Ministérios: louvor, jovens, crianças, mulheres e mais"
+  descricao="Conheça os ministérios da Igreja MART em São Caetano do Sul: Louvor e Adoração, Jovens, MART Kids, Mulheres, Homens e Intercessão. Encontre o seu lugar para servir."
+  migalhas={migalhas}
+>
+  <TopoPagina etiqueta="Ministérios" titulo="Nossos" destaque="ministérios" texto="Louvor, jovens, crianças, mulheres, homens e intercessão. Veja o que cada grupo faz e como participar." migalhas={migalhas} foto={fotoTopo} fotoAlt="Ministério de dança se apresentando durante um culto" posicao="center 30%" />
+
+  <section class="container-site py-16">
+    <ul class="grid gap-6 md:grid-cols-2">
+      {ministerios.map((m) => (
+        <li class="card group overflow-hidden">
+          <a href={`/ministerios/${m.id}/`} class="grid h-full sm:grid-cols-[1fr_1.2fr]">
+            <Image src={m.data.imagem} alt={m.data.imagemAlt} widths={[400, 600]} sizes="(min-width: 768px) 260px, 100vw" class="aspect-[4/3] h-full w-full object-cover sm:aspect-auto" />
+            <div class="flex flex-col p-6">
+              <p class="text-sm font-bold tracking-wider text-laranja-700 uppercase">{m.data.publico}</p>
+              <h2 class="mt-2 text-xl font-extrabold group-hover:text-laranja-700">{m.data.nome}</h2>
+              <p class="mt-2 flex-1 text-sm text-tinta-suave">{m.data.chamada}</p>
+              <span class="mt-4 inline-flex items-center gap-2 text-sm font-bold text-laranja-700">Saiba mais <Icone nome="seta" class="size-4 transition group-hover:translate-x-1" /></span>
+            </div>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+</Base>

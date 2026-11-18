@@ -1,0 +1,42 @@
+---
+// Mostra o próximo culto (ou "acontecendo agora"), calculado no navegador pelo horário de Brasília.
+import { SITE, fmtHora } from '../config/site';
+import Icone from './Icone.astro';
+const cultos = SITE.cultos.map((c) => ({ ...c, ini: fmtHora(c.inicio), fimF: fmtHora(c.fim) }));
+---
+<proximo-culto data-cultos={JSON.stringify(cultos)} class="block">
+  <div class="flex items-center gap-3 rounded-2xl bg-white/95 p-4 pr-6 text-tinta shadow-xl shadow-tinta/10 backdrop-blur">
+    <span class="flex size-11 items-center justify-center rounded-xl bg-laranja-500 text-tinta"><Icone nome="calendario" /></span>
+    <span class="leading-tight">
+      <span data-rotulo class="block text-xs font-bold tracking-wider text-laranja-700 uppercase">Próximo culto</span>
+      <span data-quando class="block font-extrabold">{cultos[0].diaNome}, {cultos[0].ini}</span>
+      <span data-nome class="block text-sm text-tinta-suave">{cultos[0].nome}</span>
+    </span>
+  </div>
+</proximo-culto>
+
+<script>
+  class ProximoCulto extends HTMLElement {
+    connectedCallback() {
+      const cultos: { dia: number; diaNome: string; inicio: string; fim: string; nome: string; ini: string; fimF: string }[] = JSON.parse(this.dataset.cultos!);
+      const agora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const min = (h: string) => { const [a, b] = h.split(':').map(Number); return a * 60 + b; };
+      const agoraMin = agora.getDay() * 1440 + agora.getHours() * 60 + agora.getMinutes();
+      let melhor = null as null | { c: (typeof cultos)[number]; dist: number; aoVivo: boolean };
+      for (const c of cultos) {
+        const ini = c.dia * 1440 + min(c.inicio), fim = c.dia * 1440 + min(c.fim);
+        const aoVivo = agoraMin >= ini && agoraMin < fim;
+        const dist = aoVivo ? -1 : (ini - agoraMin + 10080) % 10080;
+        if (!melhor || dist < melhor.dist) melhor = { c, dist, aoVivo };
+      }
+      if (!melhor) return;
+      const { c, dist, aoVivo } = melhor;
+      const q = (s: string) => this.querySelector(s)!;
+      const diaTxt = aoVivo ? 'Agora' : dist < 1440 && agora.getDay() === c.dia ? 'Hoje' : dist < 2880 && (agora.getDay() + 1) % 7 === c.dia ? 'Amanhã' : c.diaNome;
+      q('[data-rotulo]').textContent = aoVivo ? 'Acontecendo agora' : 'Próximo culto';
+      q('[data-quando]').textContent = aoVivo ? `Até as ${c.fimF}` : `${diaTxt}, ${c.ini}`;
+      q('[data-nome]').textContent = c.nome;
+    }
+  }
+  customElements.define('proximo-culto', ProximoCulto);
+</script>

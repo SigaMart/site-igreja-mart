@@ -1,0 +1,145 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/plus-jakarta-sans';
+@import '@fontsource/fraunces/400-italic.css';
+@import '@fontsource/fraunces/600-italic.css';
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+
+  /* Cores da marca (laranja da logo: #FB8300) */
+  --color-laranja-50: #fff7ed;
+  --color-laranja-100: #ffedd5;
+  --color-laranja-200: #fed7aa;
+  --color-laranja-300: #fdba74;
+  --color-laranja-400: #fd9b3a;
+  --color-laranja-500: #fb8300;
+  --color-laranja-600: #dd6d00;
+  --color-laranja-700: #b25200;
+  --color-laranja-800: #8c4108;
+  --color-tinta: #2a1d16;
+  --color-tinta-suave: #5b4a40;
+  --color-creme: #fffaf4;
+  --color-areia: #f6eee4;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply leading-relaxed bg-creme text-tinta font-sans antialiased;
+  }
+  ::selection {
+    @apply bg-laranja-200;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-laranja-600;
+  }
+}
+
+@layer components {
+  .container-site {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+  }
+  /* Pequeno texto acima dos títulos (sem borda/fundo) */
+  .eyebrow {
+    @apply block text-xs font-bold tracking-[0.14em] text-laranja-700 uppercase;
+  }
+  .titulo {
+    @apply text-2xl leading-tight font-extrabold tracking-tight text-balance sm:text-3xl lg:text-4xl;
+  }
+  .destaque {
+    @apply text-laranja-500;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition;
+  }
+  /* Use sempre junto com .btn: class="btn btn-primario" */
+  .btn-primario {
+    @apply bg-laranja-500 text-tinta shadow-sm shadow-laranja-500/30 hover:bg-laranja-400;
+  }
+  .btn-escuro {
+    @apply bg-tinta text-white hover:bg-tinta/85;
+  }
+  .btn-contorno {
+    @apply border border-tinta/15 bg-white text-tinta hover:border-tinta/40;
+  }
+  .card {
+    @apply rounded-3xl border border-tinta/8 bg-white shadow-sm shadow-tinta/5;
+  }
+  .verso {
+    @apply font-serif italic;
+  }
+
+  /* Texto de artigos (devocionais e blog) */
+  .prosa {
+    @apply text-base sm:text-[1.0625rem] leading-relaxed text-tinta-suave;
+  }
+  .prosa > * + * {
+    @apply mt-5;
+  }
+  .prosa h2 {
+    @apply mt-10 text-2xl font-extrabold tracking-tight text-tinta;
+  }
+  .prosa h3 {
+    @apply mt-8 text-xl font-bold text-tinta;
+  }
+  .prosa strong {
+    @apply text-tinta;
+  }
+  .prosa a {
+    @apply font-semibold text-laranja-700 underline decoration-laranja-300 underline-offset-4;
+  }
+  .prosa ul {
+    @apply list-disc space-y-2 pl-6;
+  }
+  .prosa ol {
+    @apply list-decimal space-y-2 pl-6;
+  }
+  .prosa blockquote {
+    @apply rounded-2xl border-l-4 border-laranja-500 bg-laranja-50 px-6 py-4 font-serif text-lg text-tinta italic;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Menu de tela cheia e modais: trava a rolagem da página e anima a entrada */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+dialog[open].menu-tela-cheia,
+dialog[open].modal-story {
+  animation: dialogo-entrar 0.22s ease-out;
+}
+dialog::backdrop {
+  background: rgb(42 29 22 / 0.6);
+}
+@keyframes dialogo-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* Ministérios: versículo no meio do texto (depois do 1º parágrafo) */
+.prosa-com-verso {
+  display: flex;
+  flex-direction: column;
+}
+.prosa-com-verso > * {
+  order: 3;
+}
+.prosa-com-verso > :first-child {
+  order: 1;
+}
+.prosa-com-verso > .verso-meio {
+  order: 2;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}

@@ -1,0 +1,57 @@
+---
+import { Image, getImage } from 'astro:assets';
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Compartilhar from '../../components/Compartilhar.astro';
+import { SITE } from '../../config/site';
+import { schemaArtigo } from '../../lib/schema';
+
+export async function getStaticPaths() {
+  const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+  return posts.map((p) => ({ params: { slug: p.id }, props: { p, outros: posts.filter((o) => o.id !== p.id).slice(0, 2) } }));
+}
+const { p, outros } = Astro.props;
+const { Content } = await render(p);
+const url = `/blog/${p.id}/`;
+const og = await getImage({ src: p.data.imagem, width: 1200, height: 630, fit: 'cover', format: 'jpg' });
+const dataBR = p.data.data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const migalhas = [{ nome: 'Blog', url: '/blog/' }, { nome: p.data.titulo, url }];
+---
+<Base
+  titulo={p.data.titulo}
+  descricao={p.data.descricao}
+  imagem={og.src}
+  tipo="article"
+  migalhas={migalhas}
+  jsonLd={[schemaArtigo({ titulo: p.data.titulo, descricao: p.data.descricao, url, data: p.data.data, autor: p.data.autor, imagem: SITE.url + og.src })]}
+>
+  <article class="py-14">
+    <header class="container-site max-w-3xl">
+      <nav aria-label="Você está em" class="text-sm text-tinta-suave">
+        <a href="/" class="hover:text-laranja-700">Início</a> / <a href="/blog/" class="hover:text-laranja-700">Blog</a>
+      </nav>
+      <p class="mt-8 text-sm font-bold tracking-wider text-laranja-700 uppercase">{p.data.categoria}</p>
+      <h1 class="titulo mt-3">{p.data.titulo}</h1>
+      <p class="mt-4 text-base text-tinta-suave sm:text-lg">{p.data.descricao}</p>
+      <p class="mt-4 text-sm text-tinta-suave">Por {p.data.autor} · <time datetime={p.data.data.toISOString().slice(0, 10)}>{dataBR}</time></p>
+    </header>
+    <div class="container-site mt-10 max-w-5xl">
+      <Image src={p.data.imagem} alt={p.data.imagemAlt} widths={[600, 1000, 1400]} sizes="(min-width: 1024px) 1000px, 100vw" class="aspect-[2/1] w-full rounded-[2rem] object-cover" loading="eager" />
+    </div>
+    <div class="container-site max-w-3xl">
+      <div class="prosa mt-12"><Content /></div>
+      <section class="mt-12 border-t border-tinta/10 pt-8">
+        <h2 class="font-extrabold">Gostou? Compartilhe</h2>
+        <div class="mt-4"><Compartilhar texto={`*${p.data.titulo}*\n\n${p.data.descricao}`} url={SITE.url + url} titulo={p.data.titulo} /></div>
+      </section>
+      {outros.length > 0 && (
+        <section class="mt-14">
+          <h2 class="text-xl font-extrabold">Continue lendo</h2>
+          <ul class="mt-5 grid gap-4 sm:grid-cols-2">
+            {outros.map((o) => <li><a href={`/blog/${o.id}/`} class="card group block p-5"><span class="text-sm font-bold text-laranja-700 uppercase">{o.data.categoria}</span><span class="mt-1 block font-bold group-hover:text-laranja-700">{o.data.titulo}</span></a></li>)}
+          </ul>
+        </section>
+      )}
+    </div>
+  </article>
+</Base>

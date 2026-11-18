@@ -1,0 +1,36 @@
+---
+// Botões de compartilhar: WhatsApp (texto já formatado), copiar texto e compartilhar nativo do celular.
+import Icone from './Icone.astro';
+interface Props { texto: string; url: string; titulo: string }
+const { texto, url, titulo } = Astro.props;
+const completo = `${texto}\n\n👉 ${url}`;
+---
+<compartilhar-botoes data-texto={completo} data-titulo={titulo} data-url={url} class="flex flex-wrap gap-2">
+  <a href={`https://wa.me/?text=${encodeURIComponent(completo)}`} target="_blank" rel="noopener" class="btn bg-[#25d366] text-tinta hover:bg-[#3fe07a]">
+    <Icone nome="whatsapp" class="size-4" /> Enviar no WhatsApp
+  </a>
+  <button type="button" data-copiar class="btn btn-contorno"><Icone nome="copiar" class="size-4" /> <span>Copiar texto</span></button>
+  <button type="button" data-nativo hidden class="btn btn-contorno"><Icone nome="compartilhar" class="size-4" /> Compartilhar</button>
+</compartilhar-botoes>
+
+<script>
+  class CompartilharBotoes extends HTMLElement {
+    connectedCallback() {
+      const { texto = '', titulo = '', url = '' } = this.dataset;
+      const copiar = this.querySelector<HTMLButtonElement>('[data-copiar]')!;
+      copiar.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(texto);
+          copiar.querySelector('span')!.textContent = 'Copiado!';
+          setTimeout(() => (copiar.querySelector('span')!.textContent = 'Copiar texto'), 2000);
+        } catch { /* sem permissão de área de transferência */ }
+      });
+      const nativo = this.querySelector<HTMLButtonElement>('[data-nativo]')!;
+      if ('share' in navigator) {
+        nativo.hidden = false;
+        nativo.addEventListener('click', () => navigator.share({ title: titulo, text: texto, url }).catch(() => {}));
+      }
+    }
+  }
+  customElements.define('compartilhar-botoes', CompartilharBotoes);
+</script>

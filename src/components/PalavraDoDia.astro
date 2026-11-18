@@ -1,0 +1,75 @@
+---
+// Versículo do dia: muda automaticamente todo dia (horário de Brasília), sem precisar publicar o site.
+import { passagem } from '../lib/biblia';
+import { PALAVRAS_DO_DIA } from '../lib/palavra';
+import Icone from './Icone.astro';
+import CriarStory from './CriarStory.astro';
+
+interface Props { variante?: 'grande' | 'compacta' }
+const { variante = 'grande' } = Astro.props;
+
+const lista = PALAVRAS_DO_DIA.map((r) => {
+  const p = passagem(r);
+  return { r: p.referencia, t: p.texto, u: p.url };
+});
+const indiceHoje = (d = new Date()) => {
+  const [a, m, dia] = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).split('-').map(Number);
+  return Math.floor(Date.UTC(a, m - 1, dia) / 864e5) % lista.length;
+};
+const inicial = lista[indiceHoje()];
+const dataHoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Sao_Paulo' });
+---
+<palavra-do-dia data-lista={JSON.stringify(lista)} class="block">
+  <figure class:list={['relative overflow-hidden', variante === 'grande' ? 'card p-8 sm:p-10' : 'rounded-2xl bg-white/95 p-5 shadow-xl shadow-tinta/10']}>
+    <div class="flex items-center justify-between gap-3">
+      <span class="inline-flex items-center gap-2 text-sm font-bold tracking-wider text-laranja-700 uppercase">
+        <Icone nome="sol" class="size-4" /> Palavra do dia
+      </span>
+      <span data-data class="text-sm text-tinta-suave capitalize">{dataHoje}</span>
+    </div>
+    <blockquote class:list={['verso mt-4 text-tinta', variante === 'grande' ? 'text-2xl leading-snug sm:text-3xl' : 'text-lg leading-snug']}>
+      “<span data-texto>{inicial.t}</span>”
+    </blockquote>
+    <figcaption class="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <a data-link href={inicial.u} class="font-bold text-laranja-700 hover:underline"><span data-ref>{inicial.r}</span></a>
+      {variante === 'grande' && (
+        <span class="flex flex-wrap gap-2">
+          <button type="button" data-outro class="btn btn-contorno px-4 py-2 text-sm"><Icone nome="aleatorio" class="size-4" /> Outro versículo</button>
+          <a data-whats href="#" target="_blank" rel="noopener" class="btn bg-[#25d366] px-4 py-2 text-sm text-tinta hover:bg-[#3fe07a]"><Icone nome="whatsapp" class="size-4" /> WhatsApp</a>
+          <button type="button" data-stories class="btn btn-primario px-4 py-2 text-sm"><Icone nome="estrela" class="size-4" /> Stories</button>
+        </span>
+      )}
+    </figcaption>
+  </figure>
+  {variante === 'grande' && <CriarStory semBotao nome="palavra" />}
+</palavra-do-dia>
+
+<script>
+  class PalavraDoDia extends HTMLElement {
+    connectedCallback() {
+      const lista: { r: string; t: string; u: string }[] = JSON.parse(this.dataset.lista!);
+      const [a, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).split('-').map(Number);
+      let i = Math.floor(Date.UTC(a, m - 1, d) / 864e5) % lista.length;
+      const $ = (s: string) => this.querySelector<HTMLElement>(s);
+      const mostrar = () => {
+        const v = lista[i];
+        $('[data-texto]')!.textContent = v.t;
+        $('[data-ref]')!.textContent = v.r;
+        ($('[data-link]') as HTMLAnchorElement).href = v.u;
+        const w = $('[data-whats]') as HTMLAnchorElement | null;
+        if (w) w.href = 'https://wa.me/?text=' + encodeURIComponent(`📖 *Palavra do dia*\n\n“${v.t}”\n_${v.r}_\n\nIgreja MART · ${location.origin}/biblia/`);
+      };
+      const data = $('[data-data]');
+      if (data) data.textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Sao_Paulo' });
+      $('[data-stories]')?.addEventListener('click', () => (this.querySelector('criar-story') as any)?.abrirCom(lista[i].t, lista[i].r));
+      $('[data-outro]')?.addEventListener('click', () => {
+        let n = i;
+        while (n === i) n = Math.floor(Math.random() * lista.length);
+        i = n;
+        mostrar();
+      });
+      mostrar();
+    }
+  }
+  customElements.define('palavra-do-dia', PalavraDoDia);
+</script>

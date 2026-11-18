@@ -1,0 +1,82 @@
+---
+import '../styles/global.css';
+import { getImage } from 'astro:assets';
+import { SITE } from '../config/site';
+import { schemaIgreja, schemaSite, schemaMigalhas } from '../lib/schema';
+import Cabecalho from '../components/Cabecalho.astro';
+import Rodape from '../components/Rodape.astro';
+import NavInferior from '../components/NavInferior.astro';
+import WebStories from '../components/WebStories.astro';
+import logoClara from '../assets/logo/logo-clara.png';
+import fotoCulto from '../assets/fotos/culto.jpg';
+
+interface Props {
+  titulo: string; // título da página (sem o nome da igreja)
+  descricao?: string;
+  imagem?: string; // URL absoluta ou caminho em /public
+  tipo?: 'website' | 'article';
+  migalhas?: { nome: string; url: string }[];
+  jsonLd?: object[];
+  semIndex?: boolean;
+  tituloCompleto?: boolean; // usa o título exatamente como enviado
+}
+
+const { titulo, descricao = SITE.descricao, imagem = '/og-padrao.jpg', tipo = 'website', migalhas, jsonLd = [], semIndex = false, tituloCompleto = false } = Astro.props;
+const tituloFinal = tituloCompleto ? titulo : `${titulo} | ${SITE.nome}`;
+const canonica = new URL(Astro.url.pathname, SITE.url).href;
+const imagemAbs = new URL(imagem, SITE.url).href;
+const logoOtim = await getImage({ src: logoClara, width: 512, format: 'png' });
+const culto = await getImage({ src: fotoCulto, width: 1200, format: 'jpg' });
+
+const dados = [
+  schemaIgreja(new URL(logoOtim.src, SITE.url).href, new URL(culto.src, SITE.url).href),
+  schemaSite(),
+  ...(migalhas ? [schemaMigalhas(migalhas)] : []),
+  ...jsonLd,
+];
+---
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{tituloFinal}</title>
+    <meta name="description" content={descricao} />
+    <link rel="canonical" href={canonica} />
+    {semIndex && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content="#fb8300" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <link rel="alternate" type="application/rss+xml" title="Devocionais e Blog da Igreja MART" href="/rss.xml" />
+    <link rel="alternate" type="text/plain" title="Resumo para IAs" href="/llms.txt" />
+
+    <!-- Compartilhamento (WhatsApp, Facebook, X) -->
+    <meta property="og:type" content={tipo} />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content={SITE.nome} />
+    <meta property="og:title" content={tituloFinal} />
+    <meta property="og:description" content={descricao} />
+    <meta property="og:url" content={canonica} />
+    <meta property="og:image" content={imagemAbs} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Localização -->
+    <meta name="geo.region" content="BR-SP" />
+    <meta name="geo.placename" content="São Caetano do Sul" />
+
+    {dados.map((d) => <script type="application/ld+json" set:html={JSON.stringify(d)} />)}
+    <slot name="head" />
+  </head>
+  <body class="flex min-h-dvh flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+    <a href="#conteudo" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus:bg-white focus:px-4 focus:py-2">Pular para o conteúdo</a>
+    <Cabecalho />
+    <main id="conteudo" class="flex-1">
+      <slot />
+    </main>
+    <Rodape />
+    <NavInferior />
+    <WebStories />
+  </body>
+</html>

@@ -1,0 +1,39 @@
+---
+// Mockup de celular mostrando um devocional chegando no WhatsApp
+import { Image } from 'astro:assets';
+import logo from '../assets/logo/logo-clara.png';
+
+interface Props { titulo: string; versiculo: string; referencia: string; trecho: string }
+const { titulo, versiculo, referencia, trecho } = Astro.props;
+---
+<div class="relative mx-auto w-[290px] sm:w-[310px]" aria-hidden="true">
+  <div class="rounded-[2.6rem] border-[10px] border-tinta bg-tinta shadow-2xl shadow-tinta/30">
+    <div class="overflow-hidden rounded-[2rem] bg-[#efe7dc]">
+      <div class="flex items-center gap-3 bg-[#1f4d45] px-4 pt-7 pb-3 text-white">
+        <span class="flex size-9 items-center justify-center rounded-full bg-white p-1">
+          <Image src={logo} alt="" width={40} height={37} class="w-full" />
+        </span>
+        <span class="leading-tight">
+          <span class="block text-sm font-bold">Igreja MART</span>
+          <span class="block text-xs text-white/70">Devocionais diários</span>
+        </span>
+      </div>
+      <div class="space-y-3 p-3 text-[13px] leading-snug text-tinta">
+        <div class="mx-auto w-fit rounded-md bg-white/70 px-2 py-0.5 text-xs text-tinta-suave">HOJE</div>
+        <div class="max-w-[92%] rounded-xl rounded-tl-none bg-white p-3 shadow-sm">
+          <p class="font-bold">☀️ Devocional do dia</p>
+          <p class="mt-1 font-bold text-laranja-700">{titulo}</p>
+          <p class="mt-2 italic">“{versiculo}”</p>
+          <p class="mt-1 text-xs font-semibold">{referencia}</p>
+          <p class="mt-2 line-clamp-3 text-tinta-suave">{trecho}</p>
+          <p class="mt-2 text-[12px] font-semibold text-[#027eb5] underline">igrejamart.com.br/devocionais</p>
+          <p class="mt-1 text-right text-xs text-tinta-suave">06:30</p>
+        </div>
+        <div class="ml-auto max-w-[75%] rounded-xl rounded-tr-none bg-[#d9fdd3] p-3 shadow-sm">
+          Amém! Era tudo o que eu precisava ler hoje 🙏
+          <p class="mt-1 text-right text-xs text-tinta-suave">06:42 ✓✓</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

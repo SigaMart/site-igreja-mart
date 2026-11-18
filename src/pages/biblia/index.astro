@@ -1,0 +1,135 @@
+---
+import Base from '../../layouts/Base.astro';
+import TopoPagina from '../../components/TopoPagina.astro';
+import fotoTopo from '../../assets/fotos/mart/arca.jpg';
+import PalavraDoDia from '../../components/PalavraDoDia.astro';
+import Icone from '../../components/Icone.astro';
+import { livros } from '../../lib/referencia';
+import { CREDITO_BIBLIA } from '../../config/site';
+
+const at = livros.filter((l) => l.testamento === 'AT');
+const nt = livros.filter((l) => l.testamento === 'NT');
+const migalhas = [{ nome: 'Bíblia', url: '/biblia/' }];
+const sugestoes = ['João 3:16', 'Salmos 23', 'Romanos 8:28', 'paz', 'esperança', 'Filipenses 4:13'];
+---
+<Base
+  titulo="Bíblia online: pesquise versículos (Almeida)"
+  descricao="Leia e pesquise a Bíblia online grátis, na tradução Bíblia Livre, baseada em João Ferreira de Almeida. Busque por referência (João 3:16) ou por palavra, e veja a palavra do dia."
+  migalhas={migalhas}
+>
+  <TopoPagina etiqueta="Bíblia online" titulo="Bíblia" destaque="online" texto="Busque por referência (João 3:16, Salmos 23) ou por palavra. Tradução Bíblia Livre, baseada em Almeida." migalhas={migalhas} foto={fotoTopo} fotoAlt="Réplica da arca da aliança na Igreja MART" posicao="center 35%">
+    <form id="form-busca" action="/biblia/" method="get" role="search" class="mt-8 flex text-tinta max-w-2xl gap-2 rounded-full border border-tinta/10 bg-white p-2 shadow-lg shadow-tinta/5">
+      <label for="q" class="sr-only">Pesquisar na Bíblia</label>
+      <input id="q" name="q" type="search" autocomplete="off" placeholder="Ex.: João 3:16, Salmos 23 ou “amor”" class="min-w-0 flex-1 bg-transparent px-4 text-lg outline-none" />
+      <button class="btn btn-primario"><Icone nome="busca" class="size-4" /> <span class="hidden sm:inline">Pesquisar</span></button>
+    </form>
+    <ul class="mt-4 flex flex-wrap gap-2 text-sm">
+      {sugestoes.map((s) => <li><a href={`/biblia/?q=${encodeURIComponent(s)}`} class="rounded-full bg-white px-3 py-1 font-semibold text-tinta-suave hover:text-laranja-700">{s}</a></li>)}
+    </ul>
+  </TopoPagina>
+
+  <section id="resultados" class="container-site hidden scroll-mt-24 pt-12" aria-live="polite">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 class="text-2xl font-extrabold">Resultados</h2>
+      <p id="resumo" class="text-sm text-tinta-suave"></p>
+    </div>
+    <ol id="lista" class="mt-6 space-y-3"></ol>
+  </section>
+
+  <section class="container-site py-16">
+    <PalavraDoDia />
+  </section>
+
+  <section class="container-site" aria-labelledby="t-livros">
+    <h2 id="t-livros" class="titulo">Livros da <span class="destaque">Bíblia</span></h2>
+    {[['Antigo Testamento', at], ['Novo Testamento', nt]].map(([nome, lista]) => (
+      <div class="mt-10">
+        <h3 class="text-sm font-bold tracking-wider text-laranja-700 uppercase">{nome as string} · {(lista as typeof at).length} livros</h3>
+        <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          {(lista as typeof at).map((l) => (
+            <li><a href={`/biblia/${l.slug}/`} class="flex items-center justify-between rounded-xl bg-white px-4 py-3 text-sm font-semibold transition hover:bg-laranja-50 hover:text-laranja-700"><span>{l.nome}</span><span class="text-sm text-tinta-suave">{l.caps}</span></a></li>
+          ))}
+        </ul>
+      </div>
+    ))}
+    <p class="mt-12 max-w-3xl text-sm text-tinta-suave">{CREDITO_BIBLIA} Fonte: <a href="https://ebible.org/porbr2018/" class="underline" rel="noopener" target="_blank">eBible.org</a>.</p>
+  </section>
+</Base>
+
+<script>
+  import { interpretarReferencia, urlCapitulo, normalizar } from '../../lib/referencia';
+
+  type Livro = { slug: string; nome: string; capitulos: string[][] };
+  let cache: Promise<Livro[]> | null = null;
+  const carregar = () => (cache ??= fetch('/dados/biblia.json').then((r) => r.json()));
+
+  const sec = document.getElementById('resultados')!;
+  const lista = document.getElementById('lista')!;
+  const resumo = document.getElementById('resumo')!;
+  const input = document.getElementById('q') as HTMLInputElement;
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+  function item(ref: string, url: string, html: string) {
+    return `<li class="card p-5"><a href="${url}" class="font-bold text-laranja-700 hover:underline">${esc(ref)}</a><p class="verso mt-2 text-lg">${html}</p></li>`;
+  }
+
+  async function buscar(q: string) {
+    q = q.trim();
+    if (!q) return;
+    sec.classList.remove('hidden');
+    resumo.textContent = 'Buscando…';
+    lista.innerHTML = '';
+    const biblia = await carregar();
+
+    const ref = interpretarReferencia(q);
+    if (ref) {
+      const livro = biblia.find((l) => l.slug === ref.livro.slug)!;
+      const versos = livro.capitulos[ref.cap - 1];
+      const ini = ref.vIni ?? 1, fim = Math.min(ref.vFim ?? (ref.vIni ? ref.vIni : versos.length), versos.length);
+      const url = urlCapitulo(ref.livro.slug, ref.cap);
+      lista.innerHTML = versos.slice(ini - 1, fim).map((t, i) => item(`${ref.livro.nome} ${ref.cap}:${ini + i}`, `${url}#v${ini + i}`, esc(t))).join('');
+      resumo.innerHTML = `<a class="font-bold text-laranja-700 hover:underline" href="${url}">Ler ${esc(ref.livro.nome)} ${ref.cap} completo →</a>`;
+      sec.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+
+    const termos = normalizar(q).replace(/["“”]/g, '').split(/\s+/).filter((t) => t.length > 1);
+    if (!termos.length) { resumo.textContent = 'Digite ao menos duas letras.'; return; }
+    const achados: string[] = [];
+    let total = 0;
+    for (const l of biblia) {
+      l.capitulos.forEach((cap, ci) => cap.forEach((t, vi) => {
+        const n = normalizar(t);
+        if (termos.every((tt) => n.includes(tt))) {
+          total++;
+          if (achados.length < 150) {
+            // destaca os termos sem perder os acentos do texto original
+            // (o texto sem acento tem o mesmo tamanho, então as posições coincidem)
+            let html = esc(t);
+            const marcas: [number, number][] = [];
+            for (const tt of termos) { let i = n.indexOf(tt); while (i >= 0) { marcas.push([i, i + tt.length]); i = n.indexOf(tt, i + 1); } }
+            if (n.length === t.length) {
+              marcas.sort((a, b) => b[0] - a[0]);
+              let s = t;
+              for (const [a, b] of marcas) s = s.slice(0, a) + '\u0001' + s.slice(a, b) + '\u0002' + s.slice(b);
+              html = esc(s).replace(/\u0001/g, '<mark class="rounded bg-laranja-200 px-0.5 not-italic">').replace(/\u0002/g, '</mark>');
+            }
+            achados.push(item(`${l.nome} ${ci + 1}:${vi + 1}`, `${urlCapitulo(l.slug, ci + 1)}#v${vi + 1}`, html));
+          }
+        }
+      }));
+    }
+    lista.innerHTML = achados.join('') || '<li class="card p-6 text-tinta-suave">Nenhum versículo encontrado. Tente outra palavra.</li>';
+    resumo.textContent = total > 150 ? `${total} versículos encontrados · mostrando os primeiros 150` : `${total} versículo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}`;
+    sec.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  const q = new URLSearchParams(location.search).get('q');
+  if (q) { input.value = q; buscar(q); }
+  document.getElementById('form-busca')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = input.value;
+    history.replaceState(null, '', `/biblia/?q=${encodeURIComponent(v)}`);
+    buscar(v);
+  });
+</script>
