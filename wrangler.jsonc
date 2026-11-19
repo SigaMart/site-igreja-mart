@@ -9,7 +9,10 @@
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "html_handling": "force-trailing-slash"
+    "html_handling": "force-trailing-slash",
+    // Painel, API e mídias são páginas dinâmicas: vão direto para o Worker
+    // (sem isso, o navegador recebia a página 404 do site estático).
+    "run_worker_first": ["/admin/*", "/admin", "/api/*", "/midia/*"]
   },
   "d1_databases": [{ "binding": "DB", "database_name": "igreja-mart" }],
   "kv_namespaces": [{ "binding": "MIDIA" }, { "binding": "SESSION" }],
