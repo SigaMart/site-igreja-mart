@@ -159,7 +159,8 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
   type Config = { texto: string; referencia: string; titulo: string; dominio: string; cores: Cor[]; fotos: { nome: string; grande: string; mini: string }[]; logos: { claro: string; escuro: string } };
 
   const W = 1080, H = 1920; // coordenadas de desenho
-  const ESCALA = 1; // imagem final em 1080x1920, o tamanho exato do Status do WhatsApp e dos Stories do Instagram
+  // A imagem final sai em 1080x1920 (tamanho exato do Status do WhatsApp e dos Stories do Instagram).
+  // A prévia é desenhada direto na resolução da tela, para não ficar borrada ao ser reduzida.
   const carregar = (src: string) => new Promise<HTMLImageElement>((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = src; });
   const ehClara = (hex: string) => { const n = parseInt(hex.slice(1), 16); return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 150; };
 
@@ -167,6 +168,7 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
     cfg!: Config;
     ctx!: CanvasRenderingContext2D;
     canvas!: HTMLCanvasElement;
+    saida = Object.assign(document.createElement('canvas'), { width: 1080, height: 1920 });
     dialog!: HTMLDialogElement;
     estado = { fundo: 'cor:0', cor: '#2a1d16', fonte: 'serif', alinhar: 'center', tamanho: 72, escurecer: 35, texto: '' };
     imgFundo: HTMLImageElement | null = null;
@@ -179,6 +181,7 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
       this.dialog = this.querySelector('dialog')!;
       this.canvas = this.querySelector('[data-canvas]')!;
       this.ctx = this.canvas.getContext('2d')!;
+      addEventListener('resize', () => { if (this.dialog.open) this.desenhar(); });
       this.querySelector('[data-abrir]')?.addEventListener('click', () => this.abrir());
       this.querySelector('[data-fechar]')!.addEventListener('click', () => this.dialog.close());
 
@@ -241,24 +244,34 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
       this.desenhar();
     }
 
-    quebrarLinhas(texto: string, largura: number) {
+    quebrarLinhas(ctx: CanvasRenderingContext2D, texto: string, largura: number) {
       const linhas: string[] = [];
       for (const paragrafo of texto.split('\n')) {
         let linha = '';
         for (const palavra of paragrafo.split(/\s+/).filter(Boolean)) {
           const teste = linha ? linha + ' ' + palavra : palavra;
-          if (this.ctx.measureText(teste).width > largura && linha) { linhas.push(linha); linha = palavra; } else linha = teste;
+          if (ctx.measureText(teste).width > largura && linha) { linhas.push(linha); linha = palavra; } else linha = teste;
         }
         linhas.push(linha);
       }
       return linhas;
     }
 
+    // Prévia: ajusta o canvas ao tamanho real na tela (x densidade de pixels) e desenha nele
     desenhar() {
       if (!this.pronto) return;
-      const { ctx } = this;
+      const larg = this.canvas.getBoundingClientRect().width;
+      if (larg > 0) {
+        const w = Math.min(1080, Math.round(larg * (devicePixelRatio || 1)));
+        const h = Math.round((w * H) / W);
+        if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
+      }
+      this.desenharEm(this.ctx, this.canvas.width / W);
+    }
+
+    desenharEm(ctx: CanvasRenderingContext2D, escala: number) {
       const e = this.estado;
-      ctx.setTransform(ESCALA, 0, 0, ESCALA, 0, 0);
+      ctx.setTransform(escala, 0, 0, escala, 0, 0);
       ctx.clearRect(0, 0, W, H);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
@@ -296,7 +309,7 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
       do {
         ctx.font = fam(tam);
         alturaLinha = tam * (e.fonte === 'serif' ? 1.28 : 1.22);
-        linhas = this.quebrarLinhas(e.texto.trim(), larg);
+        linhas = this.quebrarLinhas(ctx, e.texto.trim(), larg);
         if (linhas.length * alturaLinha <= limite) break;
         tam -= 2;
       } while (tam > 28);
@@ -314,7 +327,7 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
       ctx.globalAlpha = 1;
       y += 90;
 
-      if (this.imgFundo && claro) { ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 2; }
+      if (this.imgFundo && claro) { ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 18 * escala; ctx.shadowOffsetY = 2 * escala; }
       ctx.fillStyle = e.cor;
       ctx.font = fam(tam);
       for (const l of linhas) { y += alturaLinha; ctx.fillText(l, x, y - alturaLinha * 0.22); }
@@ -345,7 +358,8 @@ const config = { texto, referencia, titulo, dominio, cores: CORES, fotos, logos 
       const png = !this.imgFundo; // PNG = sem perda (letras perfeitas); fotos em JPEG 0.97 para não ficar pesado
       const tipo = png ? 'image/png' : 'image/jpeg';
       const nome = png ? 'versiculo-igreja-mart.png' : 'versiculo-igreja-mart.jpg';
-      return new Promise<File>((ok) => this.canvas.toBlob((b) => ok(new File([b!], nome, { type: tipo })), tipo, 0.97));
+      this.desenharEm(this.saida.getContext('2d')!, 1);
+      return new Promise<File>((ok) => this.saida.toBlob((b) => ok(new File([b!], nome, { type: tipo })), tipo, 0.97));
     }
 
     async baixar() {
