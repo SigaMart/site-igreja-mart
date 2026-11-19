@@ -81,11 +81,8 @@ const marca = (logo: string, tam = 1) =>
   );
 
 const rodape = () =>
-  h('div', { alignItems: 'center', justifyContent: 'space-between', width: CW, fontSize: 21, color: COR.suave, fontWeight: 500 },
-    h('span', { alignItems: 'center', gap: 10 },
-      h('span', { width: 10, height: 10, borderRadius: 10, background: COR.laranja }),
-      'Bairro Fundação · São Caetano do Sul',
-    ),
+  h('div', { alignItems: 'center', justifyContent: 'space-between', width: CW, fontSize: 21 },
+    h('span', { width: 64, height: 6, borderRadius: 6, background: COR.laranja }),
     h('span', { fontWeight: 800, color: COR.laranjaEsc }, DOMINIO),
   );
 
@@ -102,10 +99,6 @@ async function layout(c: Capa, logo: string): Promise<No> {
           eyebrow(c.eyebrow),
           h('span', { fontSize: tam, fontWeight: 800, lineHeight: 1.08, letterSpacing: -1.5, color: COR.tinta }, c.titulo),
           c.texto ? h('span', { fontSize: 24, fontWeight: 500, lineHeight: 1.4, color: COR.suave }, c.texto) : null,
-        ),
-        h('div', { alignItems: 'center', gap: 10, fontSize: 21, color: COR.suave, fontWeight: 500 },
-          h('span', { width: 10, height: 10, borderRadius: 10, background: COR.laranja }),
-          'Bairro Fundação · São Caetano do Sul',
         ),
         ),
       ),
@@ -150,7 +143,7 @@ async function layout(c: Capa, logo: string): Promise<No> {
 }
 
 // ---------- Geração (com cache em disco para builds locais mais rápidos)
-const VERSAO = '4';
+const VERSAO = '5';
 const PASTA_CACHE = join(RAIZ, 'node_modules/.cache/capas') + '/';
 
 export async function gerarCapa(c: Capa) {
