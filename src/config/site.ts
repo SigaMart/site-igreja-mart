@@ -6,6 +6,9 @@ export const SITE = {
   nomeCompleto: 'Ministério Apostólico Restauração do Templo',
   sigla: 'MART',
   url: 'https://igrejamart.com.br',
+  // Endereço onde o site está no ar de verdade (usado nas imagens de compartilhamento do WhatsApp).
+  // Quando o domínio igrejamart.com.br estiver apontado para a Cloudflare, troque para 'https://igrejamart.com.br'.
+  urlPublica: 'https://site-igreja-mart.sigamart-contato.workers.dev',
   descricao:
     'Igreja MART (Ministério Apostólico Restauração do Templo), no bairro Fundação, em São Caetano do Sul (SP). Um lugar de acolhimento para quem quer conhecer a Deus, fazer amigos e recomeçar. Cultos aos domingos, terças e quartas.',
   tipo: 'Igreja cristã',

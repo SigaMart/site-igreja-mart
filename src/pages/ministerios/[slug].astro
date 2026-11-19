@@ -14,7 +14,6 @@ export async function getStaticPaths() {
 const { m, outros } = Astro.props;
 const { Content } = await render(m);
 const v = passagem(m.data.versiculo);
-const og = await getImage({ src: m.data.imagem, width: 1200, height: 630, fit: 'cover', format: 'jpg' });
 const migalhas = [{ nome: 'Ministérios', url: '/ministerios/' }, { nome: m.data.nome, url: `/ministerios/${m.id}/` }];
 const schema = {
   '@context': 'https://schema.org',
@@ -25,7 +24,7 @@ const schema = {
   parentOrganization: { '@id': ID_IGREJA },
 };
 ---
-<Base titulo={`${m.data.nome} em São Caetano do Sul`} descricao={m.data.descricao} imagem={og.src} migalhas={migalhas} jsonLd={[schema]}>
+<Base titulo={`${m.data.nome} em São Caetano do Sul`} descricao={m.data.descricao} migalhas={migalhas} jsonLd={[schema]}>
   <section class="relative isolate overflow-hidden">
     <Image src={m.data.imagem} alt={m.data.imagemAlt} widths={[800, 1600]} sizes="100vw" class="absolute inset-0 -z-10 h-full w-full object-cover" loading="eager" />
     <div class="absolute inset-0 -z-10 bg-gradient-to-t from-tinta via-tinta/60 to-tinta/20"></div>

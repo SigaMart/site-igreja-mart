@@ -21,10 +21,12 @@ interface Props {
   tituloCompleto?: boolean; // usa o título exatamente como enviado
 }
 
-const { titulo, descricao = SITE.descricao, imagem = '/og-padrao.jpg', tipo = 'website', migalhas, jsonLd = [], semIndex = false, tituloCompleto = false } = Astro.props;
+const { titulo, descricao = SITE.descricao, imagem, tipo = 'website', migalhas, jsonLd = [], semIndex = false, tituloCompleto = false } = Astro.props;
 const tituloFinal = tituloCompleto ? titulo : `${titulo} | ${SITE.nome}`;
 const canonica = new URL(Astro.url.pathname, SITE.url).href;
-const imagemAbs = new URL(imagem, SITE.url).href;
+// Capa de compartilhamento: gerada para cada página em /capas/.../capa.jpg (src/pages/capas)
+const capa = imagem ?? (semIndex ? '/og-padrao.jpg' : `/capas${Astro.url.pathname}capa.jpg`);
+const imagemAbs = new URL(capa, SITE.urlPublica).href;
 const logoOtim = await getImage({ src: logoClara, width: 512, format: 'png' });
 const culto = await getImage({ src: fotoCulto, width: 1200, format: 'jpg' });
 
@@ -60,6 +62,10 @@ const dados = [
     <meta property="og:description" content={descricao} />
     <meta property="og:url" content={canonica} />
     <meta property="og:image" content={imagemAbs} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={tituloFinal} />
+    <meta name="twitter:image" content={imagemAbs} />
     <meta name="twitter:card" content="summary_large_image" />
 
     <!-- Localização -->

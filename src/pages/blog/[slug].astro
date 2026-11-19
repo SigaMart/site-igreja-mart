@@ -20,7 +20,6 @@ const migalhas = [{ nome: 'Blog', url: '/blog/' }, { nome: p.data.titulo, url }]
 <Base
   titulo={p.data.titulo}
   descricao={p.data.descricao}
-  imagem={og.src}
   tipo="article"
   migalhas={migalhas}
   jsonLd={[schemaArtigo({ titulo: p.data.titulo, descricao: p.data.descricao, url, data: p.data.data, autor: p.data.autor, imagem: SITE.url + og.src })]}
