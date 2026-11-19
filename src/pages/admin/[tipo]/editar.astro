@@ -1,19 +1,37 @@
 ---
-// Editor de devocional ou texto do blog. Salva o Markdown no GitHub (e a imagem do blog, se enviada).
+// Editor de devocional ou texto do blog, com assistente de IA, publicação agendada e aviso no WhatsApp.
+// Salva o Markdown no GitHub (e a imagem do blog, se for nova).
 export const prerender = false;
 import Admin from '../../../layouts/Admin.astro';
+import Icone from '../../../components/Icone.astro';
+import SeletorImagem from '../../../components/admin/SeletorImagem.astro';
 import { TIPOS } from '../../../lib/admin/conteudo';
 import { ler, gravar, apagar, lerMarkdown, montarMarkdown, slugificar } from '../../../lib/admin/github';
-import { utcParaBr } from '../../../lib/admin/db';
+import { brParaUtc, utcParaBr, todos, fmtDataHora } from '../../../lib/admin/db';
 import { lerAsset } from '../../../lib/admin/midia';
+import { agendarPublicacao, cancelarPublicacao } from '../../../lib/admin/publicacoes';
+import { criarEnvio } from '../../../lib/admin/envios';
+import { urlPublica } from '../../../lib/admin/fila';
 
 const chaveTipo = Astro.params.tipo!;
 const tipo = TIPOS[chaveTipo];
 if (!tipo) return new Response('Não encontrado', { status: 404 });
 
 const id = Astro.url.searchParams.get('id') ?? '';
+
+/** Próximo 06:20 (horário de Brasília), sugestão de horário dos devocionais */
+function proximo0620() {
+  const agora = utcParaBr(new Date().toISOString());
+  const hoje = agora.slice(0, 10);
+  if (agora.slice(11) < '06:20') return `${hoje}T06:20`;
+  const amanha = new Date(Date.parse(`${hoje}T12:00:00Z`) + 86400_000).toISOString().slice(0, 10);
+  return `${amanha}T06:20`;
+}
+/** Valor do front matter -> "AAAA-MM-DDTHH:MM" (Brasília) */
+const paraCampo = (v?: string) => !v ? '' : v.includes('T') ? utcParaBr(new Date(v).toISOString()) : `${v}T06:20`;
+
 let erro = '';
-let dados: Record<string, string> = { data: utcParaBr(new Date().toISOString()).slice(0, 10) };
+let dados: Record<string, string> = { data: chaveTipo === 'devocionais' ? proximo0620() : utcParaBr(new Date().toISOString()) };
 let corpo = '';
 
 if (Astro.request.method === 'POST') {
@@ -22,6 +40,7 @@ if (Astro.request.method === 'POST') {
   try {
     if (t('acao') === 'excluir') {
       await apagar(`${tipo.pasta}/${id}.md`, `Painel: remove ${tipo.singular} ${id}`);
+      await cancelarPublicacao(`${tipo.url}${id}/`);
       return Astro.redirect(`/admin/${chaveTipo}/?ok=${encodeURIComponent('Excluído. O site atualiza em cerca de 2 minutos.')}`);
     }
     for (const c of tipo.campos) dados[c.k] = c.tipo === 'check' ? (f.get(c.k) ? 'true' : '') : t(c.k);
@@ -29,24 +48,48 @@ if (Astro.request.method === 'POST') {
     const slug = id || slugificar(t('slug') || t('titulo'));
     if (!slug) throw new Error('Preencha o título.');
 
+    const faltando = tipo.campos.filter((c) => c.obrigatorio && !dados[c.k] && !(c.tipo === 'imagem' && (f.get('imagem_arquivo') as File | null)?.size)).map((c) => c.rotulo);
+    if (faltando.length) throw new Error(`Preencha: ${faltando.join(', ')}.`);
+    if (!corpo.trim()) throw new Error('Escreva o texto.');
+
     // Imagem nova (blog): vai para src/assets/fotos/blog/
     const arq = f.get('imagem_arquivo');
     if (arq instanceof File && arq.size) {
       if (arq.size > 8 * 1024 * 1024) throw new Error('A imagem passa de 8 MB.');
-      const ext = (arq.name.split('.').pop() ?? 'jpg').toLowerCase().replace('jpeg', 'jpg');
+      const ext = ((arq.name.split('.').pop() ?? 'jpg').toLowerCase().replace('jpeg', 'jpg'));
       if (!['jpg', 'png', 'webp'].includes(ext)) throw new Error('Use uma imagem JPG, PNG ou WebP.');
-      const caminho = `src/assets/fotos/blog/${slug}.${ext}`;
-      await gravar(caminho, new Uint8Array(await arq.arrayBuffer()), `Painel: imagem do ${tipo.singular} ${slug}`);
+      await gravar(`src/assets/fotos/blog/${slug}.${ext}`, new Uint8Array(await arq.arrayBuffer()), `Painel: imagem do ${tipo.singular} ${slug}`);
       dados.imagem = `../../assets/fotos/blog/${slug}.${ext}`;
     }
 
-    const faltando = tipo.campos.filter((c) => c.obrigatorio && !dados[c.k]).map((c) => c.rotulo);
-    if (faltando.length) throw new Error(`Preencha: ${faltando.join(', ')}.`);
-    if (!corpo.trim()) throw new Error('Escreva o texto.');
-
-    const md = montarMarkdown(Object.fromEntries(tipo.campos.map((c) => [c.k, c.tipo === 'check' ? (dados[c.k] ? true : undefined) : dados[c.k]])), corpo);
+    // Data e hora com fuso de Brasília
+    const quandoUtc = brParaUtc(dados.data);
+    const salvar = { ...dados, data: `${dados.data}:00-03:00` };
+    const md = montarMarkdown(Object.fromEntries(tipo.campos.map((c) => [c.k, c.tipo === 'check' ? (salvar[c.k] ? true : undefined) : salvar[c.k]])), corpo);
     await gravar(`${tipo.pasta}/${slug}.md`, md, `Painel: ${id ? 'atualiza' : 'novo'} ${tipo.singular} ${slug}`);
-    return Astro.redirect(`/admin/${chaveTipo}/editar/?id=${slug}&ok=${encodeURIComponent('Salvo! O site atualiza em cerca de 2 minutos.')}`);
+
+    // Publicação futura: o agendador gera o site de novo na hora marcada
+    const futuro = new Date(quandoUtc).getTime() > Date.now() && !dados.rascunho;
+    if (futuro) await agendarPublicacao(`${tipo.url}${slug}/`, quandoUtc);
+    else await cancelarPublicacao(`${tipo.url}${slug}/`);
+
+    // Mensagem no WhatsApp (popup ao agendar)
+    let msgWa = '';
+    if (t('wa_ativo') === '1') {
+      const link = `${await urlPublica()}${tipo.url}${slug}/?utm_source=whatsapp`;
+      const envio = new FormData();
+      envio.set('titulo', `${tipo.singular[0].toUpperCase()}${tipo.singular.slice(1)}: ${slug}`);
+      envio.set('canal_id', t('wa_canal'));
+      for (const g of f.getAll('wa_grupos')) envio.append('grupos', g);
+      envio.set('corpo', `${t('wa_corpo')}\n\n${tipo.chamada}\n${link}`.trim());
+      envio.set('quando', 'agendar');
+      envio.set('agendado_para', t('wa_quando'));
+      envio.set('intervalo', '8');
+      const r = await criarEnvio(envio);
+      msgWa = ` Mensagem no WhatsApp agendada para ${fmtDataHora(r.quando)}.`;
+    }
+    const msg = futuro ? `Agendado! Aparece no site em ${fmtDataHora(quandoUtc)}.${msgWa}` : `Salvo! O site atualiza em cerca de 2 minutos.${msgWa}`;
+    return Astro.redirect(`/admin/${chaveTipo}/editar/?id=${slug}&ok=${encodeURIComponent(msg)}`);
   } catch (e) {
     erro = e instanceof Error ? e.message : String(e);
   }
@@ -54,18 +97,29 @@ if (Astro.request.method === 'POST') {
   try {
     const arq = await ler(`${tipo.pasta}/${id}.md`);
     if (!arq) erro = 'Arquivo não encontrado no GitHub.';
-    else ({ dados, corpo } = lerMarkdown(arq.texto));
+    else {
+      ({ dados, corpo } = lerMarkdown(arq.texto));
+      dados.data = paraCampo(dados.data);
+    }
   } catch (e) {
     erro = e instanceof Error ? e.message : String(e);
   }
 }
 
-// Fotos já existentes no site, para escolher como capa
-let fotos: { nome: string; mini: string }[] = [];
-if (tipo.campos.some((c) => c.tipo === 'imagem')) {
-  try { fotos = await lerAsset(Astro.url, '/dados/fotos.json'); } catch { /* ok */ }
+// Prévia da imagem de capa (blog)
+let previaImagem = '';
+if (dados.imagem) {
+  try {
+    const fotos = await lerAsset<{ nome: string; mini: string }[]>(Astro.url, '/dados/fotos.json');
+    previaImagem = fotos.find((f) => `../../assets/fotos/${f.nome}` === dados.imagem)?.mini ?? '';
+  } catch { /* sem prévia */ }
 }
-const imagemAtual = dados.imagem?.replace('../../assets/fotos/', '') ?? '';
+
+const canais = await todos<{ id: number; nome: string }>('SELECT id, nome FROM canais ORDER BY id');
+const msgsAgendadas = id ? await todos<{ agendado_para: string; total: number }>(
+  "SELECT agendado_para, total FROM envios WHERE titulo = ? AND status = 'agendado' ORDER BY agendado_para",
+  `${tipo.singular[0].toUpperCase()}${tipo.singular.slice(1)}: ${id}`) : [];
+const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
 ---
 <Admin titulo={id ? `Editar ${tipo.singular}` : `Novo ${tipo.singular}`}>
   <div slot="acoes" class="flex gap-2">
@@ -73,12 +127,20 @@ const imagemAtual = dados.imagem?.replace('../../assets/fotos/', '') ?? '';
     <a href={`/admin/${chaveTipo}/`} class="btn btn-contorno">Voltar</a>
   </div>
   {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
-  <form method="post" enctype="multipart/form-data" class="grid gap-6 lg:grid-cols-[1fr_22rem]">
+  <form method="post" enctype="multipart/form-data" id="editor-conteudo" data-tipo={chaveTipo} class="grid gap-6 lg:grid-cols-[1fr_22rem]">
+    <input type="hidden" name="wa_ativo" value="" />
     <div class="adm-card space-y-4">
+      <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-50 to-laranja-50 p-3">
+        <span class="text-sm font-bold">✨ Assistente</span>
+        <button type="button" data-ia="texto" class="btn btn-contorno adm-btn-p">Formatar o texto</button>
+        <button type="button" data-ia="tudo" class="btn btn-escuro adm-btn-p">Formatar e preencher tudo</button>
+        <button type="button" data-desfazer hidden class="ml-auto text-xs font-bold text-laranja-700 underline">Desfazer</button>
+        <span data-ia-status class="w-full text-xs text-tinta-suave" hidden></span>
+      </div>
       <div>
         <div class="flex items-end justify-between gap-2">
           <span class="adm-rotulo">Texto</span>
-          <span class="flex flex-wrap gap-1" data-barra>
+          <span class="flex flex-wrap gap-1">
             <button type="button" data-ins="**|**" class="btn btn-contorno adm-btn-p font-extrabold">B</button>
             <button type="button" data-ins="*|*" class="btn btn-contorno adm-btn-p italic">I</button>
             <button type="button" data-ins={'\n## |\n'} class="btn btn-contorno adm-btn-p">Subtítulo</button>
@@ -87,7 +149,7 @@ const imagemAtual = dados.imagem?.replace('../../assets/fotos/', '') ?? '';
             <button type="button" data-ins="[|](https://)" class="btn btn-contorno adm-btn-p">Link</button>
           </span>
         </div>
-        <textarea name="corpo" rows="24" class="adm-campo font-mono text-[0.85rem] leading-relaxed" data-corpo>{corpo}</textarea>
+        <textarea name="corpo" rows="24" class="adm-campo font-mono text-[0.85rem] leading-relaxed" data-campo="texto" placeholder="Cole ou escreva o texto aqui. Depois use o assistente para organizar a formatação.">{corpo}</textarea>
         <span class="adm-dica">**negrito**, *itálico*, ## subtítulo, - lista, &gt; citação. Deixe uma linha em branco entre parágrafos.</span>
       </div>
     </div>
@@ -96,40 +158,193 @@ const imagemAtual = dados.imagem?.replace('../../assets/fotos/', '') ?? '';
         {!id && <label class="adm-rotulo">Endereço da página<input name="slug" class="adm-campo" placeholder="gerado a partir do título" /><span class="adm-dica">{tipo.url}<b>endereco</b>/</span></label>}
         {tipo.campos.map((c) =>
           c.tipo === 'check' ? (
-            <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name={c.k} checked={dados[c.k] === 'true'} class="size-4 accent-laranja-500" /> {c.rotulo}</label>
+            <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name={c.k} checked={dados[c.k] === 'true'} class="size-4 accent-laranja-500" data-rascunho={c.k === 'rascunho' ? '' : undefined} /> {c.rotulo}</label>
           ) : c.tipo === 'imagem' ? (
-            <div>
-              <span class="adm-rotulo">{c.rotulo}</span>
-              <select name={c.k} class="adm-campo">
-                <option value="">Escolha uma foto do site…</option>
-                {imagemAtual && !fotos.some((f) => f.nome === imagemAtual) && <option value={dados.imagem} selected>{imagemAtual}</option>}
-                {fotos.map((f) => <option value={`../../assets/fotos/${f.nome}`} selected={f.nome === imagemAtual}>{f.nome}</option>)}
-              </select>
-              <label class="adm-dica mt-2 block">ou envie uma nova (JPG, PNG ou WebP):<input type="file" name="imagem_arquivo" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full text-xs" /></label>
-            </div>
+            <SeletorImagem name={c.k} valor={dados[c.k]} previa={previaImagem} rotulo={c.rotulo} modo="site" />
           ) : (
-            <label class="adm-rotulo">{c.rotulo}
-              {c.tipo === 'area' ? <textarea name={c.k} rows="3" class="adm-campo">{dados[c.k]}</textarea>
-                : <input name={c.k} type={c.tipo === 'data' ? 'date' : 'text'} value={dados[c.k]} class="adm-campo" />}
+            <label class="adm-rotulo">
+              <span class="flex items-center justify-between gap-2">{c.rotulo}
+                {c.ia && <button type="button" data-ia={c.k} class="rounded-full px-2 py-0.5 text-xs font-bold text-violet-700 hover:bg-violet-50" title="Sugerir com IA">✨ Sugerir</button>}
+              </span>
+              {c.tipo === 'area' ? <textarea name={c.k} rows="3" class="adm-campo" data-campo={c.k}>{dados[c.k]}</textarea>
+                : <input name={c.k} type={c.tipo === 'datahora' ? 'datetime-local' : 'text'} value={dados[c.k]} class="adm-campo" data-campo={c.k} />}
               {c.dica && <span class="adm-dica">{c.dica}</span>}
             </label>
           ),
         )}
+        <p data-aviso-agenda hidden class="rounded-xl bg-blue-50 p-3 text-xs font-semibold text-blue-800"></p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button class="btn btn-primario">Salvar e publicar</button>
-        {id && <button name="acao" value="excluir" class="btn btn-contorno text-red-700" data-confirmar="Excluir este conteúdo do site?">Excluir</button>}
+        <button class="btn btn-primario" data-salvar>Salvar e publicar</button>
+        {id && <button name="acao" value="excluir" class="btn btn-contorno text-red-700" data-confirmar="Excluir este conteúdo do site?" formnovalidate>Excluir</button>}
       </div>
     </div>
+
+    <!-- Popup: agendar mensagem no WhatsApp junto com a publicação -->
+    <dialog data-wa class="m-auto w-[min(94vw,40rem)] rounded-3xl p-0 backdrop:bg-tinta/60">
+      <div class="border-b border-tinta/8 px-6 py-4">
+        <h3 class="flex items-center gap-2 text-lg font-extrabold"><Icone nome="whatsapp" class="size-5 text-green-600" /> Agendar mensagem no WhatsApp?</h3>
+        <p class="mt-1 text-sm text-tinta-suave">Avise os grupos quando o {tipo.singular} for ao ar.</p>
+        {msgsAgendadas.length > 0 && <p class="mt-2 rounded-xl bg-amber-50 p-2 text-xs font-semibold text-amber-800">Já existe {msgsAgendadas.length} mensagem agendada para este {tipo.singular} ({msgsAgendadas.map((m) => fmtDataHora(m.agendado_para)).join(', ')}).</p>}
+      </div>
+      <div class="max-h-[65vh] space-y-4 overflow-auto px-6 py-5">
+        {canais.length ? (
+          <>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="adm-rotulo">Enviar pelo número
+                <select name="wa_canal" class="adm-campo" data-wa-canal>{canais.map((c) => <option value={c.id}>{c.nome}</option>)}</select>
+              </label>
+              <label class="adm-rotulo">Quando<input type="datetime-local" name="wa_quando" class="adm-campo" data-wa-quando />
+                <span class="adm-dica">Sugestão: 10 min depois da publicação.</span></label>
+            </div>
+            <div>
+              <span class="adm-rotulo">Grupos</span>
+              <div data-wa-grupos class="mt-1.5 max-h-40 space-y-1 overflow-auto rounded-xl bg-creme p-3 text-sm text-tinta-suave">Carregando grupos…</div>
+            </div>
+            <div>
+              <span class="flex items-center justify-between"><span class="adm-rotulo">Mensagem</span>
+                <button type="button" data-ia="mensagem" class="rounded-full px-2 py-0.5 text-xs font-bold text-violet-700 hover:bg-violet-50">✨ Sugerir com IA</button></span>
+              <textarea name="wa_corpo" rows="6" class="adm-campo" data-campo="mensagem" placeholder="Bom dia! ☀️ ..."></textarea>
+              <div class="mt-2 rounded-xl bg-[#d9fdd3] p-3 text-sm">
+                <p class="text-xs text-tinta-suave">Vai sempre no final da mensagem:</p>
+                <p class="mt-1 font-bold">{tipo.chamada.replaceAll('*', '')}</p>
+                <p class="break-all text-blue-700 underline">{linkPrevia}</p>
+              </div>
+            </div>
+          </>
+        ) : <p class="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum número de WhatsApp conectado. <a href="/admin/configuracoes/" class="underline">Configure em Configurações</a>.</p>}
+      </div>
+      <div class="flex flex-wrap justify-end gap-2 border-t border-tinta/8 px-6 py-4">
+        <button type="button" data-wa-nao class="btn btn-contorno">Só salvar</button>
+        {canais.length > 0 && <button type="button" data-wa-sim class="btn btn-primario">Agendar mensagem e salvar</button>}
+      </div>
+    </dialog>
   </form>
 </Admin>
 
 <script>
-  const corpo = document.querySelector<HTMLTextAreaElement>('[data-corpo]')!;
-  document.querySelectorAll<HTMLButtonElement>('[data-ins]').forEach((b) => b.addEventListener('click', () => {
+  const form = document.getElementById('editor-conteudo') as HTMLFormElement;
+  const tipo = form.dataset.tipo!;
+  const campo = (k: string) => form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-campo="${k}"]`);
+  const texto = campo('texto') as HTMLTextAreaElement;
+
+  // Barra de formatação
+  form.querySelectorAll<HTMLButtonElement>('[data-ins]').forEach((b) => b.addEventListener('click', () => {
     const [antes, depois] = b.dataset.ins!.split('|');
-    const { selectionStart: a, selectionEnd: z, value: v } = corpo;
-    corpo.setRangeText(antes + v.slice(a, z) + depois, a, z, 'end');
-    corpo.focus();
+    const { selectionStart: a, selectionEnd: z, value: v } = texto;
+    texto.setRangeText(antes + v.slice(a, z) + depois, a, z, 'end');
+    texto.focus();
   }));
+
+  // ---------- Assistente de IA
+  const status = form.querySelector<HTMLElement>('[data-ia-status]')!;
+  const desfazer = form.querySelector<HTMLButtonElement>('[data-desfazer]')!;
+  let anterior: Record<string, string> | null = null;
+  const valores = () => {
+    const v: Record<string, string> = { tipo };
+    form.querySelectorAll<HTMLInputElement>('[data-campo]').forEach((el) => { if (el.dataset.campo !== 'mensagem') v[el.dataset.campo!] = el.value; });
+    return v;
+  };
+  form.querySelectorAll<HTMLButtonElement>('[data-ia]').forEach((b) => b.addEventListener('click', async () => {
+    const alvo = b.dataset.ia!;
+    const v = valores();
+    if (alvo !== 'texto' && alvo !== 'tudo' && !v.texto.trim() && alvo !== 'mensagem') { alert('Escreva o texto primeiro: o assistente usa ele como base.'); return; }
+    if ((alvo === 'texto' || alvo === 'tudo') && !v.texto.trim()) { alert('Cole ou escreva o texto primeiro.'); return; }
+    const rotulo = b.textContent;
+    b.disabled = true; b.textContent = 'Pensando…';
+    status.hidden = false; status.textContent = 'O assistente está trabalhando. Pode levar alguns segundos…';
+    try {
+      const corpo = alvo === 'mensagem'
+        ? { acao: 'mensagem', campos: { ...v, corpo: campo('mensagem')!.value } }
+        : { acao: 'conteudo', campos: v, alvo };
+      const r = await fetch('/api/admin/ia/', { method: 'POST', body: JSON.stringify(corpo) }).then((x) => x.json());
+      if (r.erro) throw new Error(r.erro);
+      if (alvo === 'mensagem') { campo('mensagem')!.value = r.mensagem; status.hidden = true; return; }
+      anterior = v;
+      for (const [k, val] of Object.entries(r as Record<string, string>)) {
+        const el = campo(k);
+        if (el && typeof val === 'string' && val.trim()) { el.value = val.trim(); el.classList.add('ring-2', 'ring-violet-300'); setTimeout(() => el.classList.remove('ring-2', 'ring-violet-300'), 2500); }
+      }
+      desfazer.hidden = false;
+      status.textContent = 'Pronto! Confira antes de salvar.';
+    } catch (e) {
+      status.textContent = (e as Error).message;
+    } finally {
+      b.disabled = false; b.textContent = rotulo;
+    }
+  }));
+  desfazer.addEventListener('click', () => {
+    if (!anterior) return;
+    for (const [k, val] of Object.entries(anterior)) { const el = campo(k); if (el) el.value = val; }
+    anterior = null; desfazer.hidden = true; status.textContent = 'Desfeito.';
+  });
+
+  // ---------- Agendamento
+  const data = campo('data') as HTMLInputElement;
+  const rascunho = form.querySelector<HTMLInputElement>('[data-rascunho]');
+  const aviso = form.querySelector<HTMLElement>('[data-aviso-agenda]')!;
+  const salvar = form.querySelector<HTMLButtonElement>('[data-salvar]')!;
+  const agoraBr = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 16);
+  const futuro = () => !!data.value && data.value > agoraBr() && !rascunho?.checked;
+  const fmt = (v: string) => `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)} às ${v.slice(11, 16)}`;
+  function atualizarAviso() {
+    const f = futuro();
+    aviso.hidden = !f;
+    if (f) aviso.textContent = `Agendado: aparece no site em ${fmt(data.value)}.`;
+    salvar.textContent = f ? 'Agendar publicação' : 'Salvar e publicar';
+  }
+  data.addEventListener('input', atualizarAviso);
+  rascunho?.addEventListener('change', atualizarAviso);
+  atualizarAviso();
+
+  // ---------- Popup do WhatsApp ao agendar
+  const dlg = form.querySelector<HTMLDialogElement>('[data-wa]')!;
+  const ativo = form.elements.namedItem('wa_ativo') as HTMLInputElement;
+  let confirmado = false;
+  form.addEventListener('submit', (e) => {
+    const botao = e.submitter as HTMLButtonElement | null;
+    if (botao?.name === 'acao' || confirmado || !futuro()) return;
+    e.preventDefault();
+    const quando = form.querySelector<HTMLInputElement>('[data-wa-quando]');
+    if (quando && !quando.value) quando.value = new Date(Date.parse(`${data.value}:00Z`) + 10 * 60_000).toISOString().slice(0, 16);
+    carregarGrupos();
+    dlg.showModal();
+  });
+  const enviar = (comWa: boolean) => {
+    if (comWa) {
+      if (!form.querySelector('[name="wa_grupos"]:checked')) { alert('Escolha pelo menos um grupo.'); return; }
+      if (!campo('mensagem')!.value.trim()) { alert('Escreva a mensagem (ou use o ✨).'); return; }
+    }
+    ativo.value = comWa ? '1' : '';
+    confirmado = true;
+    dlg.close();
+    form.requestSubmit(salvar);
+  };
+  form.querySelector('[data-wa-nao]')!.addEventListener('click', () => enviar(false));
+  form.querySelector('[data-wa-sim]')?.addEventListener('click', () => enviar(true));
+
+  let gruposCarregados = '';
+  async function carregarGrupos() {
+    const canal = form.querySelector<HTMLSelectElement>('[data-wa-canal]');
+    const caixa = form.querySelector<HTMLElement>('[data-wa-grupos]');
+    if (!canal || !caixa || gruposCarregados === canal.value) return;
+    gruposCarregados = canal.value;
+    caixa.textContent = 'Carregando grupos…';
+    try {
+      const r = await fetch(`/api/admin/canal/?id=${canal.value}&acao=grupos`).then((x) => x.json());
+      if (r.erro) throw new Error(r.erro);
+      if (!r.length) { caixa.textContent = 'Este número não está em nenhum grupo.'; return; }
+      caixa.replaceChildren(...(r as { id: string; nome: string }[]).map((g) => {
+        const l = document.createElement('label');
+        l.className = 'flex items-center gap-2 text-tinta';
+        const i = Object.assign(document.createElement('input'), { type: 'checkbox', name: 'wa_grupos', value: `${g.id}|${g.nome}`, className: 'accent-laranja-500' });
+        l.append(i, document.createTextNode(' ' + g.nome));
+        return l;
+      }));
+    } catch (e) {
+      caixa.textContent = 'Não foi possível carregar os grupos: ' + (e as Error).message;
+      gruposCarregados = '';
+    }
+  }
+  form.querySelector('[data-wa-canal]')?.addEventListener('change', carregarGrupos);
 </script>

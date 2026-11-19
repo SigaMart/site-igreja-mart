@@ -2,11 +2,12 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { SITE, enderecoCompleto, fmtHora, mapsLink } from '../config/site';
 import { FAQ } from '../lib/faq';
+import { publicado } from '../lib/publicado';
 
 // llms.txt: resumo em texto simples para assistentes de IA (ChatGPT, Claude, Gemini, Perplexity).
 export const GET: APIRoute = async () => {
-  const devocionais = (await getCollection('devocionais', (d) => !d.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
-  const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+  const devocionais = (await getCollection('devocionais', publicado)).sort((a, b) => +b.data.data - +a.data.data);
+  const posts = (await getCollection('blog', publicado)).sort((a, b) => +b.data.data - +a.data.data);
   const ministerios = (await getCollection('ministerios')).sort((a, b) => a.data.ordem - b.data.ordem);
   const u = (p: string) => SITE.url + p;
 

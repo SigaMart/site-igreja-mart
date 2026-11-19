@@ -18,6 +18,12 @@ const MIGRACOES: string[] = [
    CREATE INDEX destinos_envio ON envio_destinos(envio_id, status);
    CREATE TABLE stories (id INTEGER PRIMARY KEY, chave TEXT NOT NULL UNIQUE, titulo TEXT NOT NULL, capa TEXT, slides TEXT NOT NULL DEFAULT '[]', ativo INTEGER DEFAULT 1, ordem INTEGER DEFAULT 0, atualizado_em TEXT DEFAULT (datetime('now')));
    INSERT INTO calendarios (nome, cor, ordem) VALUES ('WhatsApp', '#16a34a', 1), ('Instagram', '#db2777', 2), ('Dia a Dia', '#f97316', 3);`,
+  // 2: publicações agendadas, stories por página e estatísticas de visitas
+  `CREATE TABLE publicacoes (id INTEGER PRIMARY KEY, caminho TEXT NOT NULL UNIQUE, quando TEXT NOT NULL, feito INTEGER DEFAULT 0);
+   ALTER TABLE stories ADD COLUMN paginas TEXT DEFAULT '';
+   CREATE TABLE visitas (id INTEGER PRIMARY KEY, criado_em TEXT DEFAULT (datetime('now')), dia TEXT NOT NULL, caminho TEXT NOT NULL, tipo TEXT DEFAULT 'pagina', visitante TEXT, novo INTEGER DEFAULT 0, origem TEXT, referencia TEXT, pais TEXT, cidade TEXT, dispositivo TEXT);
+   CREATE INDEX visitas_dia ON visitas(dia);
+   CREATE INDEX visitas_caminho ON visitas(caminho, dia);`,
 ];
 
 let pronto: Promise<void> | null = null;

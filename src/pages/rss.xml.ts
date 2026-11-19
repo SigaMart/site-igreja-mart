@@ -1,13 +1,14 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { SITE } from '../config/site';
+import { publicado } from '../lib/publicado';
 
 const esc = (s: string) => s.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]!);
 
 // Feed RSS com devocionais e blog (útil para agregadores e automações de WhatsApp/e-mail no futuro)
 export const GET: APIRoute = async () => {
-  const dev = (await getCollection('devocionais', (d) => !d.data.rascunho)).map((d) => ({ t: d.data.titulo, d: d.data.descricao, dt: d.data.data, url: `/devocionais/${d.id}/`, cat: 'Devocional' }));
-  const blog = (await getCollection('blog', (p) => !p.data.rascunho)).map((p) => ({ t: p.data.titulo, d: p.data.descricao, dt: p.data.data, url: `/blog/${p.id}/`, cat: p.data.categoria }));
+  const dev = (await getCollection('devocionais', publicado)).map((d) => ({ t: d.data.titulo, d: d.data.descricao, dt: d.data.data, url: `/devocionais/${d.id}/`, cat: 'Devocional' }));
+  const blog = (await getCollection('blog', publicado)).map((p) => ({ t: p.data.titulo, d: p.data.descricao, dt: p.data.data, url: `/blog/${p.id}/`, cat: p.data.categoria }));
   const itens = [...dev, ...blog].sort((a, b) => +b.dt - +a.dt);
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>

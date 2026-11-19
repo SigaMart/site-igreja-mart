@@ -35,7 +35,7 @@ if (Astro.request.method === 'POST') {
   return Astro.redirect('/admin/stories/');
 }
 
-const stories = await todos<{ id: number; titulo: string; capa: string; slides: string; ativo: number }>('SELECT * FROM stories ORDER BY ordem, id');
+const stories = await todos<{ id: number; titulo: string; capa: string; slides: string; ativo: number; paginas: string | null }>('SELECT * FROM stories ORDER BY ordem, id');
 ---
 <Admin titulo="Stories">
   <a slot="acoes" href="/admin/stories/editar/" class="btn btn-primario"><Icone nome="mais" class="size-4" /> Novo story</a>
@@ -44,7 +44,7 @@ const stories = await todos<{ id: number; titulo: string; capa: string; slides: 
       {stories.map((s, i) => (
         <li class:list={['adm-card flex flex-wrap items-center gap-4 p-4 sm:p-4', !s.ativo && 'opacity-55']}>
           <span class="size-14 shrink-0 rounded-full bg-cover bg-center ring-2 ring-laranja-500 ring-offset-2" style={s.capa ? (s.capa.startsWith('/') || s.capa.startsWith('http') ? `background-image:url(${s.capa})` : `background:${s.capa}`) : 'background:#fb8300'}></span>
-          <span class="min-w-0 flex-1"><b class="block">{s.titulo}</b><span class="text-xs text-tinta-suave">{JSON.parse(s.slides).length} telas · {s.ativo ? 'no ar' : 'desativado'}</span></span>
+          <span class="min-w-0 flex-1"><b class="block">{s.titulo}</b><span class="text-xs text-tinta-suave">{JSON.parse(s.slides).length} telas · {s.ativo ? 'no ar' : 'desativado'} · {s.paginas ? s.paginas.split('\n').join(', ') : 'todas as páginas'}</span></span>
           <form method="post" class="flex flex-wrap gap-1">
             <input type="hidden" name="id" value={s.id} />
             <button name="acao" value="subir" disabled={i === 0} class="btn btn-contorno adm-btn-p disabled:opacity-30" aria-label="Subir">↑</button>

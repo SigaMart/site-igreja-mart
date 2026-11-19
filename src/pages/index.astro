@@ -15,9 +15,10 @@ import { passagem } from '../lib/biblia';
 import fotoHero from '../assets/fotos/mart/adoracao.jpg';
 import fotoComunidade from '../assets/fotos/mart/pregacao.jpg';
 import fotoJovens from '../assets/fotos/mart/jovens.jpg';
+import { publicado } from '../lib/publicado';
 
-const devocionais = (await getCollection('devocionais', (d) => !d.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
-const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data).slice(0, 3);
+const devocionais = (await getCollection('devocionais', publicado)).sort((a, b) => +b.data.data - +a.data.data);
+const posts = (await getCollection('blog', publicado)).sort((a, b) => +b.data.data - +a.data.data).slice(0, 3);
 const ministerios = (await getCollection('ministerios')).sort((a, b) => a.data.ordem - b.data.ordem);
 const destaque = devocionais[0];
 const vDestaque = passagem(destaque.data.versiculo);

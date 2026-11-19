@@ -7,6 +7,7 @@ import { SITE } from '../../config/site';
 import { todos, um, executar, lerConfig, gravarConfig } from '../../lib/admin/db';
 import { gerarHash, conferirSenha } from '../../lib/admin/auth';
 import { criarInstancia, type Canal } from '../../lib/admin/whatsapp';
+import { modelosSalvos } from '../../lib/admin/ia';
 
 const eu = Astro.locals.usuario!;
 const voltar = (msg: string, tipo = 'ok') => Astro.redirect(`/admin/configuracoes/?${tipo}=${encodeURIComponent(msg)}${tipo === 'ok' ? '' : ''}`);
@@ -45,6 +46,10 @@ if (Astro.request.method === 'POST') {
         if (t('github_token')) await gravarConfig('github_token', t('github_token'));
         await gravarConfig('url_publica', t('url_publica'));
         return voltar('Configurações salvas.');
+      case 'ia':
+        if (t('ia_chave')) await gravarConfig('ia_openai_chave', t('ia_chave'));
+        if (t('ia_modelo')) await gravarConfig('ia_openai_modelo', t('ia_modelo'));
+        return voltar('Inteligência artificial salva.');
       case 'usuario': {
         if (t('senha').length < 8) return voltar('A senha precisa ter pelo menos 8 caracteres.', 'erro');
         await executar('INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)', t('nome'), t('email').toLowerCase(), await gerarHash(t('senha')));
@@ -74,6 +79,9 @@ const repo = await lerConfig('github_repo', 'SigaMart/site-igreja-mart');
 const branch = await lerConfig('github_branch', 'main');
 const temToken = !!(await lerConfig('github_token'));
 const urlPub = await lerConfig('url_publica', SITE.urlPublica);
+const temChaveIa = !!(await lerConfig('ia_openai_chave'));
+const modeloIa = await lerConfig('ia_openai_modelo', 'gpt-4o-mini');
+const modelosIa = await modelosSalvos();
 ---
 <Admin titulo="Configurações">
   <div class="space-y-8">
@@ -139,6 +147,28 @@ const urlPub = await lerConfig('url_publica', SITE.urlPublica);
           <span class="adm-dica">Crie em GitHub → Settings → Developer settings → Fine-grained tokens, só para este repositório, com permissão “Contents: Read and write”.</span></label>
         <label class="adm-rotulo sm:col-span-2">Endereço público do site<input name="url_publica" type="url" class="adm-campo" value={urlPub} />
           <span class="adm-dica">Usado nos links de mídia enviados pelo WhatsApp. Troque quando o domínio igrejamart.com.br estiver no ar.</span></label>
+        <div class="sm:col-span-2"><button class="btn btn-escuro">Salvar</button></div>
+      </form>
+    </section>
+
+    <!-- IA -->
+    <section class="adm-card">
+      <h2 class="text-lg font-extrabold">Inteligência artificial</h2>
+      <p class="mt-1 text-sm text-tinta-suave">Usada no assistente dos devocionais e do blog (formatar texto, sugerir título, resumo, oração e mensagens).</p>
+      <form method="post" class="mt-5 grid gap-4 sm:grid-cols-2" data-ia>
+        <input type="hidden" name="acao" value="ia" />
+        <label class="adm-rotulo">Provedor<select class="adm-campo" disabled><option>OpenAI</option></select></label>
+        <label class="adm-rotulo">Chave da API (OpenAI)<input name="ia_chave" type="password" class="adm-campo" autocomplete="off" placeholder={temChaveIa ? '•••••• (já configurada; preencha só para trocar)' : 'sk-…'} />
+          <span class="adm-dica">Crie em platform.openai.com → API keys.</span></label>
+        <label class="adm-rotulo sm:col-span-2">Modelo
+          <span class="mt-1.5 flex gap-2">
+            <select name="ia_modelo" class="adm-campo mt-0 flex-1" data-modelos>
+              {[...new Set([modeloIa, ...modelosIa])].map((m) => <option selected={m === modeloIa}>{m}</option>)}
+            </select>
+            <button type="button" class="btn btn-contorno shrink-0" data-atualizar>Atualizar lista</button>
+          </span>
+          <span class="adm-dica" data-aviso>{modelosIa.length ? `${modelosIa.length} modelos disponíveis na sua conta.` : 'Clique em “Atualizar lista” para buscar os modelos da sua conta.'}</span>
+        </label>
         <div class="sm:col-span-2"><button class="btn btn-escuro">Salvar</button></div>
       </form>
     </section>
@@ -227,6 +257,21 @@ const urlPub = await lerConfig('url_publica', SITE.urlPublica);
       if (r.erro) alert(r.erro);
       api(id, 'status').then((s) => pintar(li, s));
     });
+  });
+
+  // Lista de modelos da OpenAI
+  const formIa = document.querySelector<HTMLFormElement>('[data-ia]')!;
+  formIa.querySelector('[data-atualizar]')!.addEventListener('click', async (e) => {
+    const b = e.currentTarget as HTMLButtonElement, aviso = formIa.querySelector<HTMLElement>('[data-aviso]')!;
+    const sel = formIa.querySelector<HTMLSelectElement>('[data-modelos]')!;
+    b.disabled = true; aviso.textContent = 'Buscando modelos…';
+    const apikey = (formIa.elements.namedItem('ia_chave') as HTMLInputElement).value;
+    const r = await fetch('/api/admin/ia/', { method: 'POST', body: JSON.stringify({ acao: 'modelos', apikey }) }).then((x) => x.json());
+    b.disabled = false;
+    if (r.erro) { aviso.textContent = r.erro; return; }
+    const atual = sel.value;
+    sel.replaceChildren(...r.modelos.map((m: string) => new Option(m, m, false, m === atual)));
+    aviso.textContent = `${r.modelos.length} modelos disponíveis. Escolha e clique em Salvar.`;
   });
 
   // Mostra só os campos do provedor escolhido

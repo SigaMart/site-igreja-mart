@@ -4,8 +4,9 @@ import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import TopoPagina from '../../components/TopoPagina.astro';
 import fotoTopo from '../../assets/fotos/mart/culto-atual.jpg';
+import { publicado } from '../../lib/publicado';
 
-const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+const posts = (await getCollection('blog', publicado)).sort((a, b) => +b.data.data - +a.data.data);
 const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const migalhas = [{ nome: 'Blog', url: '/blog/' }];
 ---

@@ -22,7 +22,18 @@ if (Astro.request.method === 'POST') {
         if (!t('titulo') || !t('inicio')) throw new Error('Preencha o título e a data.');
         const dados = [Number(t('calendario_id')), t('titulo'), t('descricao'), brParaUtc(t('inicio')), t('fim') ? brParaUtc(t('fim')) : null, t('status') || 'planejado'];
         if (id) await executar('UPDATE eventos SET calendario_id=?, titulo=?, descricao=?, inicio=?, fim=?, status=? WHERE id=?', ...dados, id);
-        else id = Number((await executar('INSERT INTO eventos (calendario_id, titulo, descricao, inicio, fim, status) VALUES (?,?,?,?,?,?)', ...dados)).meta.last_row_id);
+        else {
+          id = Number((await executar('INSERT INTO eventos (calendario_id, titulo, descricao, inicio, fim, status) VALUES (?,?,?,?,?,?)', ...dados)).meta.last_row_id);
+          // Item novo com lembrete preenchido na aba Lembretes
+          if (f.get('com_lembrete')) {
+            try {
+              const r = await criarEnvio(f, id);
+              return Astro.redirect(`/admin/calendario/evento/?id=${id}&ok=${encodeURIComponent(`Salvo, com lembrete para ${r.total} destino(s) em ${fmtDataHora(r.quando)}.`)}`);
+            } catch (e) {
+              return Astro.redirect(`/admin/calendario/evento/?id=${id}&aba=lembretes&erro=${encodeURIComponent(`Item salvo, mas o lembrete não: ${e instanceof Error ? e.message : e}`)}`);
+            }
+          }
+        }
         return Astro.redirect(`/admin/calendario/evento/?id=${id}&ok=Salvo.`);
       }
       case 'excluir': {
@@ -67,30 +78,48 @@ const umDiaAntes = ev ? utcParaBr(new Date(new Date(ev.inicio).getTime() - 86400
   <a slot="acoes" href={`/admin/calendario/?mes=${inicio.slice(0, 7)}`} class="btn btn-contorno">Voltar ao calendário</a>
   {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
 
-  <form method="post" class="adm-card grid gap-4 sm:grid-cols-2">
+  <div class="mb-4 flex gap-1 border-b border-tinta/10" role="tablist">
+    <button type="button" role="tab" data-aba="detalhes" class="aba">Detalhes</button>
+    <button type="button" role="tab" data-aba="lembretes" class="aba">Lembretes por WhatsApp {lembretes.length > 0 && <span class="adm-selo ml-1 bg-laranja-50 text-laranja-700">{lembretes.length}</span>}</button>
+  </div>
+
+  {/* Item novo: um formulário só (detalhes + lembrete). Item existente: o lembrete tem formulário próprio. */}
+  <form method="post" enctype="multipart/form-data" id="form-item">
     <input type="hidden" name="acao" value="salvar" />
-    <label class="adm-rotulo">Calendário
-      <select name="calendario_id" class="adm-campo">{calendarios.map((c) => <option value={c.id} selected={ev?.calendario_id === c.id}>{c.nome}</option>)}</select>
-    </label>
-    <label class="adm-rotulo">Situação
-      <select name="status" class="adm-campo">{Object.entries(STATUS).map(([k, r]) => <option value={k} selected={ev?.status === k}>{r}</option>)}</select>
-    </label>
-    <label class="adm-rotulo sm:col-span-2">Título<input name="titulo" required class="adm-campo" value={ev?.titulo} placeholder="Ex.: Post do culto de domingo" /></label>
-    <label class="adm-rotulo">Início<input name="inicio" type="datetime-local" required class="adm-campo" value={inicio} /></label>
-    <label class="adm-rotulo">Fim (opcional)<input name="fim" type="datetime-local" class="adm-campo" value={ev?.fim ? utcParaBr(ev.fim) : ''} /></label>
-    <label class="adm-rotulo sm:col-span-2">Descrição / roteiro<textarea name="descricao" rows="5" class="adm-campo" placeholder="Texto do post, ideias, quem é responsável…">{ev?.descricao}</textarea></label>
-    <div class="flex flex-wrap gap-2 sm:col-span-2">
-      <button class="btn btn-escuro">Salvar</button>
-      {ev && <button name="acao" value="excluir" class="btn btn-contorno text-red-700" data-confirmar="Excluir este item? Lembretes ainda não enviados serão cancelados.">Excluir</button>}
-    </div>
+    <section data-painel="detalhes" class="adm-card grid gap-4 sm:grid-cols-2">
+      <label class="adm-rotulo">Calendário
+        <select name="calendario_id" class="adm-campo">{calendarios.map((c) => <option value={c.id} selected={ev?.calendario_id === c.id}>{c.nome}</option>)}</select>
+      </label>
+      <label class="adm-rotulo">Situação
+        <select name="status" class="adm-campo">{Object.entries(STATUS).map(([k, r]) => <option value={k} selected={ev?.status === k}>{r}</option>)}</select>
+      </label>
+      <label class="adm-rotulo sm:col-span-2">Título<input name="titulo" required class="adm-campo" value={ev?.titulo} placeholder="Ex.: Post do culto de domingo" data-ev="titulo" /></label>
+      <label class="adm-rotulo">Início<input name="inicio" type="datetime-local" required class="adm-campo" value={inicio} data-ev="inicio" /></label>
+      <label class="adm-rotulo">Fim (opcional)<input name="fim" type="datetime-local" class="adm-campo" value={ev?.fim ? utcParaBr(ev.fim) : ''} /></label>
+      <label class="adm-rotulo sm:col-span-2">Descrição / roteiro<textarea name="descricao" rows="5" class="adm-campo" placeholder="Texto do post, ideias, quem é responsável…" data-ev="descricao">{ev?.descricao}</textarea></label>
+      <div class="flex flex-wrap gap-2 sm:col-span-2">
+        <button class="btn btn-escuro">Salvar</button>
+        {!ev && <button type="button" class="btn btn-contorno" data-ir="lembretes">Adicionar lembrete →</button>}
+        {ev && <button name="acao" value="excluir" formnovalidate class="btn btn-contorno text-red-700" data-confirmar="Excluir este item? Lembretes ainda não enviados serão cancelados.">Excluir</button>}
+      </div>
+    </section>
+
+    {!ev && (
+      <section data-painel="lembretes" class="adm-card" hidden>
+        <label class="mb-5 flex items-center gap-2 rounded-xl bg-laranja-50 p-3 text-sm font-bold">
+          <input type="checkbox" name="com_lembrete" class="size-4 accent-laranja-500" data-com-lembrete /> Agendar este lembrete ao salvar o item
+        </label>
+        <Compositor mostrarTitulo={false} quando=" " />
+        <button class="btn btn-primario mt-5">Salvar item e lembrete</button>
+      </section>
+    )}
   </form>
 
   {ev && (
-    <section class="mt-8">
-      <h2 class="text-lg font-extrabold">Lembretes por WhatsApp</h2>
-      <p class="mt-1 text-sm text-tinta-suave">Avise as pessoas escolhidas sobre este item, por exemplo para confirmar presença.</p>
+    <section data-painel="lembretes" hidden>
+      <p class="mb-4 text-sm text-tinta-suave">Avise as pessoas escolhidas sobre este item, por exemplo para confirmar presença.</p>
       {lembretes.length > 0 && (
-        <ul class="mt-4 space-y-2">
+        <ul class="mb-4 space-y-2">
           {lembretes.map((l) => (
             <li class="adm-card flex flex-wrap items-center gap-3 p-4 sm:p-4">
               <span class={`adm-selo ${STATUS_ENVIO[l.status]?.[1]}`}>{STATUS_ENVIO[l.status]?.[0]}</span>
@@ -105,15 +134,58 @@ const umDiaAntes = ev ? utcParaBr(new Date(new Date(ev.inicio).getTime() - 86400
           ))}
         </ul>
       )}
-      <details class="adm-card mt-4" open={!lembretes.length}>
-        <summary class="cursor-pointer font-extrabold">+ Novo lembrete</summary>
-        <form method="post" enctype="multipart/form-data" class="mt-5">
-          <input type="hidden" name="acao" value="lembrete" />
-          <input type="hidden" name="titulo" value={`Lembrete: ${ev.titulo}`} />
-          <Compositor corpo={sugestao} quando={umDiaAntes} mostrarTitulo={false} />
-          <button class="btn btn-primario mt-5">Agendar lembrete</button>
-        </form>
-      </details>
+      <form method="post" enctype="multipart/form-data" class="adm-card">
+        <h3 class="mb-4 font-extrabold">Novo lembrete</h3>
+        <input type="hidden" name="acao" value="lembrete" />
+        <input type="hidden" name="titulo" value={`Lembrete: ${ev.titulo}`} />
+        <Compositor corpo={sugestao} quando={umDiaAntes} mostrarTitulo={false} />
+        <button class="btn btn-primario mt-5">Agendar lembrete</button>
+      </form>
     </section>
   )}
 </Admin>
+
+<style>
+  .aba { padding: 0.6rem 1rem; font-size: 0.875rem; font-weight: 700; color: var(--color-tinta-suave); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .aba[aria-selected='true'] { color: var(--color-laranja-700); border-color: var(--color-laranja-500); }
+</style>
+
+<script>
+  const abas = document.querySelectorAll<HTMLButtonElement>('[data-aba]');
+  const paineis = document.querySelectorAll<HTMLElement>('[data-painel]');
+  function abrir(nome: string) {
+    abas.forEach((a) => a.setAttribute('aria-selected', String(a.dataset.aba === nome)));
+    paineis.forEach((p) => { p.hidden = p.dataset.painel !== nome; });
+    history.replaceState(null, '', `${location.pathname}${location.search}#${nome}`);
+    if (nome === 'lembretes') sugerir();
+  }
+  abas.forEach((a) => a.addEventListener('click', () => abrir(a.dataset.aba!)));
+  document.querySelectorAll<HTMLElement>('[data-ir]').forEach((b) => b.addEventListener('click', () => abrir(b.dataset.ir!)));
+  const inicial = new URLSearchParams(location.search).get('aba') ?? location.hash.slice(1);
+  abrir(inicial === 'lembretes' ? 'lembretes' : 'detalhes');
+
+  // Item novo: sugere a mensagem e o horário (1 dia antes) com o que já foi preenchido
+  function sugerir() {
+    const form = document.getElementById('form-item') as HTMLFormElement;
+    const corpo = form.querySelector<HTMLTextAreaElement>('[data-corpo]');
+    if (!corpo) return;
+    const v = (k: string) => form.querySelector<HTMLInputElement>(`[data-ev="${k}"]`)!.value.trim();
+    const inicio = v('inicio');
+    if (!corpo.value.trim() && v('titulo') && inicio) {
+      const d = new Date(`${inicio}:00-03:00`);
+      const quando = d.toLocaleString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+      const desc = v('descricao') ? `\n${v('descricao')}\n` : '';
+      corpo.value = `Olá, {nome}! 👋\n\n*${v('titulo')}*\n📅 ${quando}\n${desc}\nPodemos contar com você? Responda *SIM* para confirmar. 🙏`;
+      corpo.dispatchEvent(new Event('input'));
+    }
+    const ag = form.querySelector<HTMLInputElement>('[name="agendado_para"]');
+    if (ag && !ag.value.trim() && inicio) ag.value = new Date(Date.parse(`${inicio}:00Z`) - 86400_000).toISOString().slice(0, 16);
+    const agendar = form.querySelector<HTMLInputElement>('[name="quando"][value="agendar"]');
+    if (agendar) agendar.checked = true;
+  }
+  // Mexeu no lembrete: marca "agendar ao salvar"
+  document.querySelector('#form-item [data-painel="lembretes"]')?.addEventListener('change', (e) => {
+    const marcar = document.querySelector<HTMLInputElement>('[data-com-lembrete]');
+    if (marcar && (e.target as HTMLElement) !== marcar) marcar.checked = true;
+  });
+</script>

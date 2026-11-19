@@ -11,7 +11,14 @@ if (Astro.request.method === 'POST') {
   const t = (k: string) => String(f.get(k) ?? '').trim();
   if (t('acao') === 'calendario' && t('nome')) {
     if (Number(t('id'))) await executar('UPDATE calendarios SET nome = ?, cor = ? WHERE id = ?', t('nome'), t('cor') || '#f97316', Number(t('id')));
-    else await executar('INSERT INTO calendarios (nome, cor, ordem) VALUES (?, ?, 99)', t('nome'), t('cor') || '#f97316');
+    else {
+      // Cor sorteada (de preferência uma que ainda não está em uso); dá para trocar depois
+      const PALETA = ['#2563eb', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0d9488', '#0891b2', '#4f46e5', '#c026d3', '#65a30d'];
+      const usadas = new Set((await todos<{ cor: string }>('SELECT cor FROM calendarios')).map((c) => c.cor.toLowerCase()));
+      const livres = PALETA.filter((c) => !usadas.has(c));
+      const opcoes = livres.length ? livres : PALETA;
+      await executar('INSERT INTO calendarios (nome, cor, ordem) VALUES (?, ?, 99)', t('nome'), opcoes[Math.floor(Math.random() * opcoes.length)]);
+    }
   }
   if (t('acao') === 'excluir-calendario') {
     await executar('DELETE FROM eventos WHERE calendario_id = ?', Number(t('id')));
@@ -55,7 +62,7 @@ const alternar = (id: number) => { const s = new Set(ocultos); if (s.has(id)) s.
       <div class="mb-3 flex items-center gap-2">
         <a href={qs({ mes: mover(-1) })} class="btn btn-contorno adm-btn-p" aria-label="Mês anterior"><Icone nome="setaEsq" class="size-4" /></a>
         <a href={qs({ mes: mover(1) })} class="btn btn-contorno adm-btn-p" aria-label="Próximo mês"><Icone nome="seta" class="size-4" /></a>
-        <h2 class="ml-2 text-lg font-extrabold capitalize">{nomeMes}</h2>
+        <h2 class="ml-2 text-lg font-extrabold first-letter:uppercase">{nomeMes}</h2>
         <a href={qs({ mes: hojeBr.slice(0, 7) })} class="btn btn-contorno adm-btn-p ml-auto">Hoje</a>
       </div>
       <div class="overflow-x-auto">
@@ -108,11 +115,11 @@ const alternar = (id: number) => { const s = new Set(ocultos); if (s.has(id)) s.
         <form method="post" class="mt-4 flex gap-2 border-t border-tinta/8 pt-4">
           <input type="hidden" name="acao" value="calendario" />
           <input name="nome" placeholder="Novo calendário" required class="adm-campo mt-0 min-w-0 flex-1" />
-          <input name="cor" type="color" value="#7c3aed" class="h-10 w-10 shrink-0 rounded-lg" aria-label="Cor" />
           <button class="btn btn-escuro adm-btn-p shrink-0" aria-label="Adicionar"><Icone nome="mais" class="size-4" /></button>
         </form>
       </section>
-      <p class="text-xs text-tinta-suave">Clique no número do dia para criar um item nele. 🔔 = tem lembrete por WhatsApp. ✓ = publicado.</p>
+      <a href="/admin/calendario/pdf/" class="btn btn-escuro w-full"><Icone nome="compartilhar" class="size-4" /> Exportar PDF</a>
+      <p class="text-xs text-tinta-suave">A cor do calendário novo é sorteada: troque no lápis. Clique no número do dia para criar um item nele. 🔔 = tem lembrete por WhatsApp. ✓ = publicado.</p>
     </aside>
   </div>
 </Admin>

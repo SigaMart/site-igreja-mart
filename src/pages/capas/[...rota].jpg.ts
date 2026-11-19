@@ -6,6 +6,7 @@ import { SITE, fmtHora } from '../../config/site';
 import { livros } from '../../lib/referencia';
 import { passagem } from '../../lib/biblia';
 import { gerarCapa, caminhoImagem, type Capa } from '../../lib/capas';
+import { publicado } from '../../lib/publicado';
 
 const horarios = SITE.cultos.map((c) => `${c.diaNome.split('-')[0]} ${fmtHora(c.inicio)}`).join(' · ');
 
@@ -42,11 +43,11 @@ const grupoDoLivro = (i: number) => {
 export const getStaticPaths = (async () => {
   const capas: Record<string, Capa> = { ...PAGINAS };
 
-  for (const d of await getCollection('devocionais', (d) => !d.data.rascunho)) {
+  for (const d of await getCollection('devocionais', publicado)) {
     const v = passagem(d.data.versiculo);
     capas[`/devocionais/${d.id}/`] = { tipo: 'verso', eyebrow: 'Devocional', texto: v.texto, referencia: v.referencia };
   }
-  for (const p of await getCollection('blog', (p) => !p.data.rascunho)) {
+  for (const p of await getCollection('blog', publicado)) {
     capas[`/blog/${p.id}/`] = { tipo: 'pagina', eyebrow: p.data.categoria ?? 'Blog', titulo: p.data.titulo, foto: p.data.imagem ? caminhoImagem(p.data.imagem) : caminhoImagem('fotos/mart/culto-atual.jpg') };
   }
   for (const m of await getCollection('ministerios')) {

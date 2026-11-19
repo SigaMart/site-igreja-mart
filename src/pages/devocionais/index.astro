@@ -6,8 +6,9 @@ import fotoTopo from '../../assets/fotos/mart/louvor.jpg';
 import CelularWhatsApp from '../../components/CelularWhatsApp.astro';
 import Icone from '../../components/Icone.astro';
 import { passagem } from '../../lib/biblia';
+import { publicado } from '../../lib/publicado';
 
-const lista = (await getCollection('devocionais', (d) => !d.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+const lista = (await getCollection('devocionais', publicado)).sort((a, b) => +b.data.data - +a.data.data);
 const [hoje, ...anteriores] = lista;
 const vHoje = passagem(hoje.data.versiculo);
 const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });

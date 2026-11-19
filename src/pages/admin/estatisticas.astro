@@ -1,0 +1,176 @@
+---
+// Estatísticas do site: visitas, visitantes únicos, páginas mais vistas, stories e origem das visitas.
+export const prerender = false;
+import Admin from '../../layouts/Admin.astro';
+import { todos, um, utcParaBr } from '../../lib/admin/db';
+import { lerAsset } from '../../lib/admin/midia';
+import { livros } from '../../lib/referencia';
+
+const PERIODOS = [[7, '7 dias'], [30, '30 dias'], [90, '90 dias'], [365, '12 meses']] as const;
+const dias = PERIODOS.some(([d]) => d === Number(Astro.url.searchParams.get('dias'))) ? Number(Astro.url.searchParams.get('dias')) : 30;
+const hoje = utcParaBr(new Date().toISOString()).slice(0, 10);
+const desde = new Date(Date.parse(`${hoje}T12:00:00Z`) - (dias - 1) * 86400_000).toISOString().slice(0, 10);
+
+type N = { n: number };
+const pag = "tipo = 'pagina' AND dia >= ?";
+const totais = await um<{ vistas: number; unicos: number; novos: number }>(
+  `SELECT COUNT(*) vistas, COUNT(DISTINCT visitante) unicos, COUNT(DISTINCT CASE WHEN novo = 1 THEN visitante END) novos FROM visitas WHERE ${pag}`, desde);
+const storiesVistos = (await um<N>("SELECT COUNT(*) n FROM visitas WHERE tipo = 'story' AND dia >= ?", desde))?.n ?? 0;
+
+const porDiaBruto = await todos<{ dia: string; vistas: number; unicos: number }>(
+  `SELECT dia, COUNT(*) vistas, COUNT(DISTINCT visitante) unicos FROM visitas WHERE ${pag} GROUP BY dia`, desde);
+const mapaDia = new Map(porDiaBruto.map((d) => [d.dia, d]));
+const serie = Array.from({ length: dias }, (_, i) => {
+  const d = new Date(Date.parse(`${desde}T12:00:00Z`) + i * 86400_000).toISOString().slice(0, 10);
+  return { dia: d, vistas: mapaDia.get(d)?.vistas ?? 0, unicos: mapaDia.get(d)?.unicos ?? 0 };
+});
+const maxDia = Math.max(1, ...serie.map((s) => s.vistas));
+
+const topo = (onde: string, limite = 10, ...extra: unknown[]) => todos<{ caminho: string; vistas: number; unicos: number }>(
+  `SELECT caminho, COUNT(*) vistas, COUNT(DISTINCT visitante) unicos FROM visitas WHERE ${pag} ${onde} GROUP BY caminho ORDER BY vistas DESC LIMIT ${limite}`, desde, ...extra);
+const paginas = await topo('', 15);
+const devocionais = await topo("AND caminho LIKE '/devocionais/_%'");
+const blog = await topo("AND caminho LIKE '/blog/_%'");
+const biblia = await topo("AND caminho LIKE '/biblia/%'", 8);
+const totalBiblia = (await um<N>(`SELECT COUNT(*) n FROM visitas WHERE ${pag} AND caminho LIKE '/biblia/%'`, desde))?.n ?? 0;
+const stories = await todos<{ caminho: string; vistas: number; unicos: number }>(
+  "SELECT caminho, COUNT(*) vistas, COUNT(DISTINCT visitante) unicos FROM visitas WHERE tipo = 'story' AND dia >= ? GROUP BY caminho ORDER BY vistas DESC", desde);
+const agrupar = (campo: string, onde = '') => todos<{ nome: string; n: number }>(
+  `SELECT COALESCE(${campo}, 'Desconhecido') nome, COUNT(DISTINCT visitante) n FROM visitas WHERE ${pag} ${onde} GROUP BY nome ORDER BY n DESC LIMIT 10`, desde);
+const origens = await agrupar('origem', "AND origem != 'Interno'");
+const cidades = await todos<{ nome: string; n: number }>(
+  `SELECT COALESCE(cidade, '?') || CASE WHEN pais IS NOT NULL AND pais != 'BR' THEN ' (' || pais || ')' ELSE '' END nome, COUNT(DISTINCT visitante) n FROM visitas WHERE ${pag} GROUP BY nome ORDER BY n DESC LIMIT 10`, desde);
+const dispositivos = await agrupar('dispositivo');
+
+// Nomes amigáveis
+type Item = { id: string; titulo: string };
+let conteudo: Record<string, Item[]> = {};
+try { conteudo = await lerAsset(Astro.url, '/dados/conteudo.json'); } catch { /* ok */ }
+const titulos = new Map<string, string>([
+  ['/', 'Página inicial'], ['/sobre/', 'Sobre'], ['/cultos/', 'Cultos'], ['/ministerios/', 'Ministérios'], ['/devocionais/', 'Devocionais'],
+  ['/blog/', 'Blog'], ['/biblia/', 'Bíblia'], ['/oracao/', 'Pedido de oração'], ['/contato/', 'Contato'],
+  ...(conteudo.devocionais ?? []).map((d) => [`/devocionais/${d.id}/`, d.titulo] as [string, string]),
+  ...(conteudo.blog ?? []).map((d) => [`/blog/${d.id}/`, d.titulo] as [string, string]),
+]);
+const nomeLivro = new Map(livros.map((l) => [l.slug, l.nome]));
+const nomePagina = (c: string) => {
+  if (titulos.has(c)) return titulos.get(c)!;
+  const b = c.match(/^\/biblia\/([^/]+)\/(?:(\d+)\/)?$/);
+  if (b) return `${nomeLivro.get(b[1]) ?? b[1]}${b[2] ? ` ${b[2]}` : ''}`;
+  return c;
+};
+const nomesStories = new Map((await todos<{ chave: string; titulo: string }>('SELECT chave, titulo FROM stories')).map((s) => [s.chave, s.titulo]));
+try { for (const s of await lerAsset<{ id: string; titulo: string }[]>(Astro.url, '/dados/stories-padrao.json')) if (!nomesStories.has(s.id)) nomesStories.set(s.id, s.titulo); } catch { /* ok */ }
+
+const fmt = (n: number) => n.toLocaleString('pt-BR');
+const totalUnicos = Math.max(1, totais?.unicos ?? 0);
+const vazio = !totais?.vistas;
+---
+<Admin titulo="Estatísticas do site">
+  <nav slot="acoes" class="flex flex-wrap gap-1">
+    {PERIODOS.map(([d, r]) => <a href={`?dias=${d}`} class:list={['btn adm-btn-p', d === dias ? 'btn-escuro' : 'btn-contorno']}>{r}</a>)}
+  </nav>
+
+  {vazio && <p class="adm-vazio mb-6">Ainda não há visitas registradas neste período. Os números começam a aparecer conforme as pessoas acessam o site.</p>}
+
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {[
+      ['Visualizações de páginas', totais?.vistas ?? 0],
+      ['Visitantes únicos', totais?.unicos ?? 0],
+      ['Visitantes novos', totais?.novos ?? 0],
+      ['Stories abertos', storiesVistos],
+    ].map(([r, v]) => (
+      <div class="adm-card"><p class="text-3xl font-extrabold">{fmt(v as number)}</p><p class="text-xs text-tinta-suave">{r}</p></div>
+    ))}
+  </div>
+
+  <section class="adm-card mt-6">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-extrabold">Visitas por dia</h2>
+      <span class="flex gap-4 text-xs font-semibold text-tinta-suave">
+        <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-sm bg-laranja-400"></i> Visualizações</span>
+        <span class="flex items-center gap-1.5"><i class="size-2.5 rounded-sm bg-tinta"></i> Visitantes únicos</span>
+      </span>
+    </div>
+    <div class="mt-4 flex h-44 items-end gap-[2px]">
+      {serie.map((s) => (
+        <div class="group relative flex h-full flex-1 items-end" title={`${s.dia.split('-').reverse().join('/')}: ${s.vistas} visualizações, ${s.unicos} visitantes`}>
+          <div class="w-full rounded-t-sm bg-laranja-300 transition group-hover:bg-laranja-500" style={`height:${(s.vistas / maxDia) * 100}%`}></div>
+          <div class="absolute bottom-0 left-1/4 w-1/2 rounded-t-sm bg-tinta/80" style={`height:${(s.unicos / maxDia) * 100}%`}></div>
+        </div>
+      ))}
+    </div>
+    <div class="mt-1 flex justify-between text-[0.65rem] text-tinta-suave">
+      <span>{serie[0].dia.split('-').reverse().slice(0, 2).join('/')}</span><span>{serie.at(-1)!.dia.split('-').reverse().slice(0, 2).join('/')}</span>
+    </div>
+  </section>
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-2">
+    <section class="adm-card">
+      <h2 class="font-extrabold">Páginas mais vistas</h2>
+      <table class="adm-tabela mt-2"><thead><tr><th>Página</th><th class="text-right">Visualizações</th><th class="text-right">Pessoas</th></tr></thead>
+        <tbody>{paginas.map((p) => <tr><td><a href={p.caminho} target="_blank" class="hover:underline">{nomePagina(p.caminho)}</a></td><td class="text-right">{fmt(p.vistas)}</td><td class="text-right">{fmt(p.unicos)}</td></tr>)}</tbody>
+      </table>
+    </section>
+
+    <section class="adm-card">
+      <h2 class="font-extrabold">De onde vêm as visitas</h2>
+      <ul class="mt-3 space-y-2.5 text-sm">
+        {origens.map((o) => (
+          <li>
+            <span class="flex justify-between"><b>{o.nome}</b><span class="text-tinta-suave">{fmt(o.n)} {o.n === 1 ? 'pessoa' : 'pessoas'}</span></span>
+            <span class="mt-1 block h-2 overflow-hidden rounded-full bg-tinta/6"><span class="block h-full rounded-full bg-laranja-500" style={`width:${(o.n / totalUnicos) * 100}%`}></span></span>
+          </li>
+        ))}
+      </ul>
+      <p class="mt-4 text-xs text-tinta-suave">Links enviados pelo painel no WhatsApp levam a marca de origem. Links copiados e colados à mão costumam aparecer como “Direto”.</p>
+    </section>
+
+    {[['Devocionais', devocionais], ['Blog', blog]].map(([titulo, lista]) => (
+      <section class="adm-card">
+        <h2 class="font-extrabold">{titulo as string}</h2>
+        {(lista as typeof paginas).length ? (
+          <table class="adm-tabela mt-2"><thead><tr><th>Texto</th><th class="text-right">Visualizações</th><th class="text-right">Pessoas</th></tr></thead>
+            <tbody>{(lista as typeof paginas).map((p) => <tr><td>{nomePagina(p.caminho)}</td><td class="text-right">{fmt(p.vistas)}</td><td class="text-right">{fmt(p.unicos)}</td></tr>)}</tbody>
+          </table>
+        ) : <p class="mt-2 text-sm text-tinta-suave">Sem visitas no período.</p>}
+      </section>
+    ))}
+
+    <section class="adm-card">
+      <h2 class="font-extrabold">Web Stories</h2>
+      {stories.length ? (
+        <table class="adm-tabela mt-2"><thead><tr><th>Story</th><th class="text-right">Aberturas</th><th class="text-right">Pessoas</th></tr></thead>
+          <tbody>{stories.map((s) => <tr><td>{nomesStories.get(s.caminho) ?? s.caminho}</td><td class="text-right">{fmt(s.vistas)}</td><td class="text-right">{fmt(s.unicos)}</td></tr>)}</tbody>
+        </table>
+      ) : <p class="mt-2 text-sm text-tinta-suave">Nenhum story aberto no período.</p>}
+    </section>
+
+    <section class="adm-card">
+      <h2 class="font-extrabold">Bíblia online <span class="text-sm font-semibold text-tinta-suave">· {fmt(totalBiblia)} visualizações</span></h2>
+      {biblia.length ? (
+        <table class="adm-tabela mt-2"><thead><tr><th>Mais lidos</th><th class="text-right">Visualizações</th></tr></thead>
+          <tbody>{biblia.map((p) => <tr><td>{nomePagina(p.caminho)}</td><td class="text-right">{fmt(p.vistas)}</td></tr>)}</tbody>
+        </table>
+      ) : <p class="mt-2 text-sm text-tinta-suave">Sem visitas no período.</p>}
+    </section>
+
+    <section class="adm-card">
+      <h2 class="font-extrabold">Cidades</h2>
+      <ul class="mt-3 space-y-1.5 text-sm">{cidades.map((c) => <li class="flex justify-between"><span>{c.nome}</span><span class="text-tinta-suave">{fmt(c.n)}</span></li>)}</ul>
+    </section>
+
+    <section class="adm-card">
+      <h2 class="font-extrabold">Aparelhos</h2>
+      <ul class="mt-3 space-y-2.5 text-sm">
+        {dispositivos.map((d) => (
+          <li>
+            <span class="flex justify-between"><b>{d.nome}</b><span class="text-tinta-suave">{Math.round((d.n / totalUnicos) * 100)}%</span></span>
+            <span class="mt-1 block h-2 overflow-hidden rounded-full bg-tinta/6"><span class="block h-full rounded-full bg-tinta" style={`width:${(d.n / totalUnicos) * 100}%`}></span></span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  </div>
+  <p class="mt-6 text-xs text-tinta-suave">Sem cookies: cada navegador recebe um número aleatório só para contar visitantes únicos. Robôs e o próprio painel não entram na conta.</p>
+</Admin>

@@ -37,7 +37,8 @@ if (Astro.request.method === 'POST') {
   } else {
     const u = await um<{ id: number; nome: string; email: string; senha: string }>('SELECT * FROM usuarios WHERE email = ?', email);
     if (u && (await conferirSenha(senha, u.senha))) {
-      Astro.session?.regenerate();
+      // Nova sessão a cada login (precisa esperar: senão apaga o usuário gravado logo depois)
+      await Astro.session?.regenerate();
       Astro.session?.set('usuario', { id: u.id, nome: u.nome, email: u.email });
       return Astro.redirect(destino);
     }

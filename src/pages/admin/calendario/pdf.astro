@@ -1,0 +1,178 @@
+---
+// Exportar o calendário em PDF (pelo "Salvar como PDF" do navegador), com logo, para mandar nos grupos.
+// Filtros: quais calendários, de qual mês até qual mês, lista ou grade, com ou sem descrições.
+export const prerender = false;
+import '../../../styles/global.css';
+import '../../../styles/admin.css';
+import { getImage } from 'astro:assets';
+import logo from '../../../assets/logo/logo-clara.png';
+import { SITE } from '../../../config/site';
+import { todos, brParaUtc, utcParaBr } from '../../../lib/admin/db';
+
+const q = Astro.url.searchParams;
+const calendarios = await todos<{ id: number; nome: string; cor: string }>('SELECT * FROM calendarios ORDER BY ordem, nome');
+const mesAtual = utcParaBr(new Date().toISOString()).slice(0, 7);
+const de = /^\d{4}-\d{2}$/.test(q.get('de') ?? '') ? q.get('de')! : mesAtual;
+let ate = /^\d{4}-\d{2}$/.test(q.get('ate') ?? '') ? q.get('ate')! : de;
+if (ate < de) ate = de;
+const escolhidos = q.has('cal') ? q.getAll('cal').map(Number) : calendarios.map((c) => c.id);
+const formato = q.get('formato') === 'grade' ? 'grade' : 'lista';
+const comDescricao = q.get('descricao') !== '0';
+const tituloDoc = q.get('titulo')?.trim() || 'Agenda da Igreja MART';
+const logoImg = await getImage({ src: logo, width: 160 });
+
+// Meses do período
+const meses: string[] = [];
+for (let m = de; m <= ate && meses.length < 12; ) {
+  meses.push(m);
+  const [a, n] = m.split('-').map(Number);
+  m = new Date(Date.UTC(a, n, 1)).toISOString().slice(0, 7);
+}
+const fimMes = (m: string) => { const [a, n] = m.split('-').map(Number); return new Date(Date.UTC(a, n, 1)).toISOString().slice(0, 10); };
+
+const cal = new Map(calendarios.map((c) => [c.id, c]));
+const eventos = escolhidos.length ? await todos<{ id: number; titulo: string; descricao: string; inicio: string; fim: string | null; calendario_id: number }>(
+  `SELECT * FROM eventos WHERE calendario_id IN (${escolhidos.map(() => '?').join(',')}) AND inicio >= ? AND inicio < ? ORDER BY inicio`,
+  ...escolhidos, brParaUtc(`${meses[0]}-01T00:00`), brParaUtc(`${fimMes(meses.at(-1)!)}T00:00`)) : [];
+const doMes = (m: string) => eventos.filter((e) => utcParaBr(e.inicio).startsWith(m));
+const porDia = (lista: typeof eventos) => {
+  const mapa = new Map<string, typeof eventos>();
+  for (const e of lista) { const d = utcParaBr(e.inicio).slice(0, 10); mapa.set(d, [...(mapa.get(d) ?? []), e]); }
+  return [...mapa];
+};
+const nomeMes = (m: string) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const diaSemana = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' });
+const hora = (iso: string) => utcParaBr(iso).slice(11).replace(':00', 'h').replace(':', 'h');
+const grade = (m: string) => {
+  const [a, n] = m.split('-').map(Number);
+  const primeiro = new Date(Date.UTC(a, n - 1, 1));
+  const ini = primeiro.getTime() - primeiro.getUTCDay() * 86400_000;
+  const dias = Array.from({ length: 42 }, (_, i) => new Date(ini + i * 86400_000).toISOString().slice(0, 10));
+  const ult = dias.findLastIndex((d) => d.startsWith(m));
+  return dias.slice(0, Math.ceil((ult + 1) / 7) * 7);
+};
+const periodo = meses.length > 1 ? `${nomeMes(meses[0])} a ${nomeMes(meses.at(-1)!)}` : nomeMes(meses[0]);
+const usados = calendarios.filter((c) => escolhidos.includes(c.id));
+---
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{tituloDoc} · {periodo}</title>
+    <link rel="icon" href="/favicon-32.png" />
+  </head>
+  <body class="bg-areia font-sans text-tinta antialiased">
+    <!-- Filtros (não saem no PDF) -->
+    <form class="nao-imprimir sticky top-0 z-10 border-b border-tinta/10 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex max-w-5xl flex-wrap items-end gap-4 px-4 py-3 text-sm">
+        <a href="/admin/calendario/" class="font-bold text-laranja-700">← Calendário</a>
+        <fieldset class="flex flex-wrap gap-2">
+          {calendarios.map((c) => (
+            <label class="flex cursor-pointer items-center gap-1.5 rounded-full border border-tinta/10 px-2.5 py-1 has-checked:border-tinta/40">
+              <input type="checkbox" name="cal" value={c.id} checked={escolhidos.includes(c.id)} class="accent-laranja-500" />
+              <span class="size-2.5 rounded-full" style={`background:${c.cor}`}></span>{c.nome}
+            </label>
+          ))}
+        </fieldset>
+        <label class="font-bold">De <input type="month" name="de" value={de} class="ml-1 rounded-lg border border-tinta/15 px-2 py-1 font-normal" /></label>
+        <label class="font-bold">Até <input type="month" name="ate" value={ate} class="ml-1 rounded-lg border border-tinta/15 px-2 py-1 font-normal" /></label>
+        <label class="font-bold">Formato
+          <select name="formato" class="ml-1 rounded-lg border border-tinta/15 px-2 py-1 font-normal">
+            <option value="lista" selected={formato === 'lista'}>Lista</option>
+            <option value="grade" selected={formato === 'grade'}>Calendário (grade)</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-1.5"><input type="checkbox" name="descricao" value="1" checked={comDescricao} class="accent-laranja-500" /> Descrições</label>
+        <input type="hidden" name="descricao" value="0" disabled={comDescricao} data-sem-descricao />
+        <label class="font-bold">Título <input name="titulo" value={tituloDoc} class="ml-1 w-48 rounded-lg border border-tinta/15 px-2 py-1 font-normal" /></label>
+        <button class="btn btn-contorno adm-btn-p">Atualizar</button>
+        <button type="button" onclick="window.print()" class="btn btn-primario ml-auto">Baixar PDF</button>
+      </div>
+      <p class="mx-auto max-w-5xl px-4 pb-2 text-xs text-tinta-suave">Em “Baixar PDF”, escolha <b>Salvar como PDF</b> no destino da impressão.</p>
+    </form>
+
+    <main class:list={['folha mx-auto my-6 bg-white shadow-xl', formato === 'grade' && 'paisagem']}>
+      <header class="flex items-center gap-4 border-b-4 border-laranja-500 pb-5">
+        <img src={logoImg.src} alt="" class="h-16 w-auto" />
+        <div class="flex-1">
+          <p class="text-xs font-extrabold tracking-[0.2em] text-laranja-700 uppercase">Igreja MART · Restauração do Templo</p>
+          <h1 class="text-3xl leading-tight font-extrabold tracking-tight">{tituloDoc}</h1>
+          <p class="text-lg font-semibold text-tinta-suave first-letter:uppercase">{periodo}</p>
+        </div>
+        <ul class="hidden space-y-1 text-xs font-semibold sm:block">
+          {usados.map((c) => <li class="flex items-center gap-1.5"><span class="size-2.5 rounded-full" style={`background:${c.cor}`}></span>{c.nome}</li>)}
+        </ul>
+      </header>
+
+      {meses.map((m) => (
+        <section class="mes mt-7">
+          <h2 class="rounded-xl bg-tinta px-4 py-2 text-lg font-extrabold text-white first-letter:uppercase">{nomeMes(m)}</h2>
+          {formato === 'lista' ? (
+            doMes(m).length ? (
+              <ol class="mt-3 divide-y divide-tinta/8">
+                {porDia(doMes(m)).map(([dia, itens]) => (
+                  <li class="dia flex gap-4 py-3">
+                    <div class="w-16 shrink-0 text-center">
+                      <p class="text-3xl leading-none font-extrabold text-laranja-600">{Number(dia.slice(8))}</p>
+                      <p class="mt-1 text-[0.65rem] font-bold tracking-wide text-tinta-suave uppercase">{diaSemana(dia).split('-')[0]}</p>
+                    </div>
+                    <ul class="flex-1 space-y-2">
+                      {itens.map((e) => (
+                        <li class="border-l-4 pl-3" style={`border-color:${cal.get(e.calendario_id)?.cor}`}>
+                          <p class="font-bold"><span class="text-tinta-suave">{hora(e.inicio)}{e.fim && ` – ${hora(e.fim)}`}</span> · {e.titulo}</p>
+                          {usados.length > 1 && <p class="text-[0.7rem] font-bold tracking-wide uppercase" style={`color:${cal.get(e.calendario_id)?.cor}`}>{cal.get(e.calendario_id)?.nome}</p>}
+                          {comDescricao && e.descricao && <p class="mt-0.5 text-sm whitespace-pre-line text-tinta-suave">{e.descricao}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ol>
+            ) : <p class="mt-3 text-sm text-tinta-suave">Nada programado neste mês.</p>
+          ) : (
+            <div class="mt-3 grid grid-cols-7 overflow-hidden rounded-xl border-r border-b border-tinta/15 text-[0.7rem]">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => <div class="border-t border-l border-tinta/15 bg-creme py-1 text-center font-extrabold uppercase">{d}</div>)}
+              {grade(m).map((d) => (
+                <div class:list={['min-h-20 border-t border-l border-tinta/15 p-1', !d.startsWith(m) && 'bg-areia/50 text-tinta-suave/40']}>
+                  <p class="font-extrabold">{Number(d.slice(8))}</p>
+                  {d.startsWith(m) && eventos.filter((e) => utcParaBr(e.inicio).startsWith(d)).map((e) => (
+                    <p class="mt-0.5 rounded px-1 py-0.5 leading-tight font-semibold text-white" style={`background:${cal.get(e.calendario_id)?.cor}`}>{hora(e.inicio)} {e.titulo}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+
+      <footer class="mt-8 flex items-center justify-between border-t border-tinta/10 pt-4 text-xs text-tinta-suave">
+        <span><b class="text-tinta">Igreja MART</b> · {SITE.endereco.rua}, {SITE.endereco.bairro}</span>
+        <span>igrejamart.com.br · {SITE.instagramUsuario}</span>
+      </footer>
+    </main>
+
+    <style is:global>
+      .folha { width: 210mm; min-height: 297mm; padding: 14mm 14mm 12mm; }
+      .folha.paisagem { width: 297mm; min-height: 210mm; }
+      .dia, .mes h2 { break-inside: avoid; }
+      .mes h2 { break-after: avoid; }
+      @media print {
+        @page { size: A4; margin: 0; }
+        .nao-imprimir { display: none !important; }
+        body { background: #fff; }
+        .folha { margin: 0; box-shadow: none; width: auto; min-height: 0; }
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+      @media screen and (max-width: 860px) { .folha, .folha.paisagem { width: auto; margin: 0; padding: 6mm; } }
+    </style>
+    {formato === 'grade' && <style is:global>{'@media print { @page { size: A4 landscape; } }'}</style>}
+    <script>
+      // Checkbox "Descrições" desmarcado envia descricao=0
+      const cb = document.querySelector<HTMLInputElement>('input[type=checkbox][name=descricao]')!;
+      const oculto = document.querySelector<HTMLInputElement>('[data-sem-descricao]')!;
+      cb.addEventListener('change', () => { oculto.disabled = cb.checked; });
+    </script>
+  </body>
+</html>

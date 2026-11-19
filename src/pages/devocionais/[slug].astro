@@ -7,9 +7,10 @@ import Icone from '../../components/Icone.astro';
 import { SITE } from '../../config/site';
 import { passagem } from '../../lib/biblia';
 import { schemaArtigo } from '../../lib/schema';
+import { publicado } from '../../lib/publicado';
 
 export async function getStaticPaths() {
-  const lista = (await getCollection('devocionais', (d) => !d.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+  const lista = (await getCollection('devocionais', publicado)).sort((a, b) => +b.data.data - +a.data.data);
   return lista.map((d, i) => ({ params: { slug: d.id }, props: { d, anterior: lista[i + 1], proximo: lista[i - 1] } }));
 }
 const { d, anterior, proximo } = Astro.props;

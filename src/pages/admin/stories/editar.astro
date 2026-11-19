@@ -6,7 +6,7 @@ import Admin from '../../../layouts/Admin.astro';
 import { um, executar } from '../../../lib/admin/db';
 import { limparCacheStories } from '../../../lib/admin/stories';
 
-type Linha = { id: number; chave: string; titulo: string; capa: string; slides: string; ativo: number };
+type Linha = { id: number; chave: string; titulo: string; capa: string; slides: string; ativo: number; paginas: string };
 const id = Number(Astro.url.searchParams.get('id')) || 0;
 let erro = '';
 
@@ -19,8 +19,14 @@ if (Astro.request.method === 'POST') {
     if (!Array.isArray(slides) || !slides.length) throw new Error('Adicione pelo menos uma tela.');
     // Capa (bolinha): a primeira foto do story; sem foto, a cor da primeira tela
     const capa = slides.find((s: { foto?: string }) => s.foto)?.foto || slides[0].fundo || '';
-    if (id) await executar("UPDATE stories SET titulo = ?, capa = ?, slides = ?, atualizado_em = datetime('now') WHERE id = ?", titulo, capa, JSON.stringify(slides), id);
-    else await executar('INSERT INTO stories (chave, titulo, capa, slides, ordem) VALUES (?, ?, ?, ?, 999)', `s${Date.now().toString(36)}`, titulo, capa, JSON.stringify(slides));
+    // Onde aparece: vazio = todas as páginas; senão, uma página por linha (/cultos/, /devocionais/*)
+    const paginas = f.get('onde') === 'paginas'
+      ? [...new Set([...f.getAll('pagina').map(String), ...String(f.get('outras') ?? '').split(/[\n,]/)].map((p) => p.trim()).filter(Boolean)
+          .map((p) => (p.startsWith('/') ? p : `/${p}`)).map((p) => (p.endsWith('/') || p.endsWith('*') ? p : `${p}/`)))].join('\n')
+      : '';
+    if (f.get('onde') === 'paginas' && !paginas) throw new Error('Escolha pelo menos uma página (ou deixe em todas as páginas).');
+    if (id) await executar("UPDATE stories SET titulo = ?, capa = ?, slides = ?, paginas = ?, atualizado_em = datetime('now') WHERE id = ?", titulo, capa, JSON.stringify(slides), paginas, id);
+    else await executar('INSERT INTO stories (chave, titulo, capa, slides, paginas, ordem) VALUES (?, ?, ?, ?, ?, 999)', `s${Date.now().toString(36)}`, titulo, capa, JSON.stringify(slides), paginas);
     await limparCacheStories(Astro.url);
     return Astro.redirect('/admin/stories/?ok=Story+salvo.');
   } catch (e) {
@@ -30,6 +36,12 @@ if (Astro.request.method === 'POST') {
 
 const s = id ? await um<Linha>('SELECT * FROM stories WHERE id = ?', id) : null;
 const inicial = s ? s.slides : JSON.stringify([{ fundo: 'linear-gradient(160deg, #fff6ea 0%, #ffe2bd 100%)', cor: '#2a1d16', vpos: 'center', titulo: 'Título do story' }]);
+const PAGINAS = [
+  ['/', 'Página inicial'], ['/cultos/', 'Cultos'], ['/sobre/', 'Sobre'], ['/ministerios/*', 'Ministérios'],
+  ['/devocionais/*', 'Devocionais'], ['/blog/*', 'Blog'], ['/biblia/*', 'Bíblia'], ['/oracao/', 'Pedido de oração'], ['/contato/', 'Contato'],
+];
+const escolhidas = (s?.paginas ?? '').split('\n').filter(Boolean);
+const outras = escolhidas.filter((p) => !PAGINAS.some(([v]) => v === p));
 const FUNDOS = [
   ['Creme', 'linear-gradient(160deg, #fff6ea 0%, #ffe2bd 100%)', '#2a1d16'],
   ['Laranja', 'linear-gradient(160deg, #ffb347 0%, #fb8300 55%, #c25a00 100%)', '#2a1d16'],
@@ -49,6 +61,25 @@ const FUNDOS = [
           <label class="adm-rotulo min-w-48 flex-1">Nome do story (aparece no topo)<input name="titulo" required class="adm-campo" value={s?.titulo} placeholder="Ex.: Culto de domingo" /></label>
           <button class="btn btn-primario">Salvar story</button>
         </div>
+        <fieldset class="adm-card">
+          <legend class="sr-only">Onde aparece</legend>
+          <p class="adm-rotulo">Onde este story aparece</p>
+          <div class="mt-2 flex flex-wrap gap-4 text-sm">
+            <label class="flex items-center gap-2"><input type="radio" name="onde" value="global" checked={!escolhidas.length} class="accent-laranja-500" data-onde /> Em todas as páginas</label>
+            <label class="flex items-center gap-2"><input type="radio" name="onde" value="paginas" checked={escolhidas.length > 0} class="accent-laranja-500" data-onde /> Só em algumas páginas</label>
+          </div>
+          <div data-paginas hidden={!escolhidas.length} class="mt-3 space-y-3">
+            <div class="flex flex-wrap gap-2">
+              {PAGINAS.map(([v, r]) => (
+                <label class="adm-selo cursor-pointer border border-tinta/10 bg-white py-1 has-checked:border-laranja-400 has-checked:bg-laranja-50">
+                  <input type="checkbox" name="pagina" value={v} checked={escolhidas.includes(v)} class="accent-laranja-500" /> {r}
+                </label>
+              ))}
+            </div>
+            <label class="adm-rotulo">Outras páginas<input name="outras" value={outras.join(', ')} class="adm-campo" placeholder="/ministerios/jovens/, /blog/primeira-vez-na-igreja/" />
+              <span class="adm-dica">Separe por vírgula. Termine com * para incluir as páginas de dentro (ex.: /devocionais/*).</span></label>
+          </div>
+        </fieldset>
         <div data-abas class="flex flex-wrap gap-2"></div>
         <div data-campos class="adm-card grid gap-4 sm:grid-cols-2"></div>
       </div>
@@ -59,20 +90,13 @@ const FUNDOS = [
     </div>
   </form>
 
-  <dialog id="galeria" class="m-auto w-[min(94vw,46rem)] rounded-3xl p-5 backdrop:bg-tinta/60">
-    <div class="flex items-center justify-between gap-3">
-      <h3 class="text-lg font-extrabold">Escolher foto</h3>
-      <label class="btn btn-escuro adm-btn-p cursor-pointer">Enviar do computador<input type="file" accept="image/*" hidden data-upload /></label>
-    </div>
-    <div data-fotos class="mt-4 grid max-h-[60vh] grid-cols-3 gap-2 overflow-auto sm:grid-cols-5">Carregando…</div>
-    <form method="dialog" class="mt-4 text-right"><button class="btn btn-contorno">Fechar</button></form>
-  </dialog>
 </Admin>
 
 <script>
   import { renderSlide } from '../../../scripts/stories/render';
   import { interpretarReferencia, formatarReferencia } from '../../../lib/referencia';
   import type { Slide } from '../../../scripts/stories/tipos';
+  import { abrirGaleria } from '../../../scripts/admin/galeria';
 
   const form = document.getElementById('editor') as HTMLFormElement;
   const slides: Slide[] = JSON.parse(form.dataset.slides!);
@@ -160,7 +184,7 @@ const FUNDOS = [
       const [, g, cor] = FUNDOS[Number(b.dataset.fundo)];
       s.foto = undefined; s.fundo = g; s.cor = cor; s.escurecer = undefined;
       tudo();
-    } else if ('foto' in b.dataset) abrirGaleria();
+    } else if ('foto' in b.dataset) escolherFoto();
     else if ('tirarFoto' in b.dataset) { s.foto = undefined; s.fundo ??= FUNDOS[0][1]; tudo(); }
     else if ('buscar' in b.dataset) {
       const r = interpretarReferencia(campos.querySelector<HTMLInputElement>('[data-verso-ref]')!.value);
@@ -181,33 +205,30 @@ const FUNDOS = [
     }
   });
 
-  // Galeria de fotos do site + upload
-  const galeria = document.getElementById('galeria') as HTMLDialogElement;
-  const grade = galeria.querySelector<HTMLElement>('[data-fotos]')!;
-  let fotos: { nome: string; foto: string; mini: string }[] | null = null;
-  function escolher(url: string) {
+  // Galeria: fotos do site, enviar, arrastar ou colar
+  async function escolherFoto() {
+    const r = await abrirGaleria('midia', 'Foto de fundo');
+    if (!r?.valor) return;
     const s = slides[atual];
-    s.foto = url; s.fundo = undefined; s.cor = '#ffffff'; s.escurecer ??= 35;
-    galeria.close(); tudo();
+    s.foto = r.valor; s.fundo = undefined; s.cor = '#ffffff'; s.escurecer ??= 35;
+    tudo();
   }
-  async function abrirGaleria() {
-    galeria.showModal();
-    fotos ??= await fetch('/dados/fotos.json').then((r) => r.json());
-    grade.replaceChildren(...fotos!.map((f) => {
-      const b = h(`<button type="button" class="aspect-square overflow-hidden rounded-xl ring-laranja-500 hover:ring-2"><img src="${f.mini}" alt="${esc(f.nome)}" loading="lazy" class="size-full object-cover"></button>`);
-      b.onclick = () => escolher(f.foto);
-      return b;
-    }));
-  }
-  galeria.querySelector<HTMLInputElement>('[data-upload]')!.addEventListener('change', async (e) => {
-    const arq = (e.target as HTMLInputElement).files?.[0];
-    if (!arq) return;
-    const fd = new FormData(); fd.append('arquivo', arq);
-    grade.textContent = 'Enviando…';
-    const r = await fetch('/api/admin/midia/', { method: 'POST', body: fd }).then((x) => x.json());
-    if (r.erro) { alert(r.erro); fotos = null; return abrirGaleria(); }
-    escolher(r.url);
+  // Arrastar uma imagem direto na prévia
+  previa.addEventListener('dragover', (e) => e.preventDefault());
+  previa.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const arq = e.dataTransfer?.files[0];
+    if (!arq?.type.startsWith('image/')) return;
+    const { enviarMidia } = await import('../../../scripts/admin/galeria');
+    const s = slides[atual];
+    s.foto = await enviarMidia(arq); s.fundo = undefined; s.cor = '#ffffff'; s.escurecer ??= 35;
+    tudo();
   });
+
+  // Onde aparece
+  form.querySelectorAll<HTMLInputElement>('[data-onde]').forEach((r) => r.addEventListener('change', () => {
+    form.querySelector<HTMLElement>('[data-paginas]')!.hidden = r.value !== 'paginas' || !r.checked;
+  }));
 
   form.addEventListener('submit', () => {
     (form.elements.namedItem('slides') as HTMLInputElement).value = JSON.stringify(slides);

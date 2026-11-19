@@ -2,6 +2,7 @@
 // segurar para pausar, arrastar para baixo para fechar e coração para curtir.
 import type { Slide, Story } from './tipos';
 import { aplicarCapa, renderSlide } from './render';
+import { registrar } from '../estatisticas';
 
 const ICONE = {
   fechar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -105,6 +106,7 @@ export function abrirPlayer(stories: Story[], inicio = 0, aoFechar?: () => void)
     $('.ms-name').textContent = s.titulo;
     aplicarCapa($('.ms-avatar'), s.capa);
     marcarVisto(s.id);
+    registrar('story', s.id);
     mostrarSlide();
   }
 

@@ -5,9 +5,10 @@ import Base from '../../layouts/Base.astro';
 import Compartilhar from '../../components/Compartilhar.astro';
 import { SITE } from '../../config/site';
 import { schemaArtigo } from '../../lib/schema';
+import { publicado } from '../../lib/publicado';
 
 export async function getStaticPaths() {
-  const posts = (await getCollection('blog', (p) => !p.data.rascunho)).sort((a, b) => +b.data.data - +a.data.data);
+  const posts = (await getCollection('blog', publicado)).sort((a, b) => +b.data.data - +a.data.data);
   return posts.map((p) => ({ params: { slug: p.id }, props: { p, outros: posts.filter((o) => o.id !== p.id).slice(0, 2) } }));
 }
 const { p, outros } = Astro.props;

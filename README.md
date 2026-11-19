@@ -59,7 +59,14 @@ Em `/admin/` a equipe gerencia o site sem mexer em código:
 | Stories | Web Stories do site (aparecem na hora) | Banco D1 |
 | Devocionais e Blog | Textos do site | GitHub (o site atualiza em ~2 min) |
 | Bíblia | Correção de versículos | `src/data/biblia-correcoes.json` no GitHub |
-| Configurações | Números de WhatsApp (Evolution API ou GoWA), token do GitHub, usuários | Banco D1 |
+| Configurações | Números de WhatsApp (Evolution API ou GoWA), token do GitHub, IA (OpenAI), usuários | Banco D1 |
+| Estatísticas | Visitas, visitantes únicos, páginas, stories e origem das visitas (sem cookies) | Banco D1 |
+
+**Publicação agendada:** devocionais e textos do blog com data futura só aparecem no site na hora marcada.
+O agendador grava `src/data/publicacao.json` no GitHub nessa hora, e a Cloudflare gera o site de novo.
+
+**Assistente de IA:** nos devocionais e no blog, formata o texto e sugere título, resumo, versículo,
+oração, pergunta e a mensagem de WhatsApp (`src/lib/admin/ia.ts`).
 
 **Primeiro acesso:** na Cloudflare, em Workers → igreja-mart → Settings → Variables and Secrets,
 crie o segredo `ADMIN_CODIGO` com um código qualquer. Ele é pedido só para criar o primeiro usuário.

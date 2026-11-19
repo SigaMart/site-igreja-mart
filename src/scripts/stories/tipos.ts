@@ -26,4 +26,6 @@ export type Story = {
   titulo: string;
   capa: string;
   slides: Slide[];
+  /** Páginas onde aparece (ex.: "/cultos/", "/devocionais/*"). Vazio = todas. */
+  paginas?: string[];
 };

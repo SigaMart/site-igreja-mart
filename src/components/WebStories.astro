@@ -22,12 +22,19 @@ const STORIES = await storiesPadrao();
 
   const flutuante = document.getElementById('ms-stories') as HTMLElement;
 
+  const naPagina = (paginas?: string[]) => {
+    if (!paginas?.length) return true;
+    const aqui = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
+    return paginas.some((p) => (p.endsWith('*') ? aqui.startsWith(p.slice(0, -1)) : aqui === p));
+  };
+
   // Stories do painel (atualizados na hora); se não houver ou a rede falhar, usa os do build.
   async function carregar(): Promise<Story[]> {
     try {
       const r = await fetch('/api/stories/', { signal: AbortSignal.timeout(3000) });
       const lista = (await r.json()) as Story[];
-      if (Array.isArray(lista) && lista.length) return lista;
+      // Só os stories desta página (ou os globais)
+      if (Array.isArray(lista) && lista.length) return lista.filter((s) => naPagina(s.paginas));
     } catch { /* usa o padrão */ }
     return JSON.parse(flutuante.dataset.stories || '[]');
   }
