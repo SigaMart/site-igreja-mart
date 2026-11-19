@@ -2,7 +2,7 @@
 titulo: "Misericórdias novas a cada manhã"
 versiculo: "Lamentações 3:22-23"
 descricao: "Um devocional sobre recomeços. Ontem não precisa definir o seu hoje, porque as misericórdias de Deus se renovam a cada manhã."
-data: 2026-11-19
+data: 2026-11-21
 oracao: "Senhor, obrigado porque a tua misericórdia não acabou ontem. Hoje eu recebo o teu novo começo. Tira de mim o peso do que passou e me ajuda a viver este dia confiando na tua fidelidade. Em nome de Jesus, amém."
 pergunta: "O que você precisa deixar no \"ontem\" para viver o dia de hoje com leveza?"
 ---
