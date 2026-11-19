@@ -19,7 +19,7 @@ const migalhas = [{ nome: 'Pedido de oração', url: '/oracao/' }];
   <TopoPagina etiqueta="Pedido de oração" titulo="Pedido de" destaque="oração" texto="Escreva seu pedido. A equipe de intercessão vai orar por você, e o que você escrever fica em sigilo." migalhas={migalhas} foto={fotoTopo} fotoAlt="Irmãos de mãos dadas orando durante um culto" />
 
   <section class="container-site grid gap-12 py-16 lg:grid-cols-[1.2fr_1fr]">
-    <form id="form-oracao" class="card space-y-5 p-8 sm:p-10">
+    <form id="form-oracao" class="card relative space-y-5 p-8 sm:p-10">
       <div class="grid gap-5 sm:grid-cols-2">
         <label class="block">
           <span class="text-sm font-bold">Seu nome <span class="font-normal text-tinta-suave">(opcional)</span></span>
@@ -44,12 +44,13 @@ const migalhas = [{ nome: 'Pedido de oração', url: '/oracao/' }];
         <input name="contatar" type="checkbox" class="mt-1 size-4 accent-laranja-500" />
         Gostaria que alguém da igreja entrasse em contato comigo.
       </label>
+      <input name="site" tabindex="-1" autocomplete="off" aria-hidden="true" class="absolute -left-[9999px]" />
       <button class="btn btn-primario w-full sm:w-auto"><Icone nome="maos" class="size-4" /> Enviar pedido</button>
       <p class="text-sm text-tinta-suave">Seu pedido é tratado com sigilo e usado apenas para oração e, se você pedir, para entrarmos em contato.</p>
       <div id="aviso" hidden class="rounded-2xl bg-laranja-50 p-5 text-sm">
-        <p class="font-bold">O envio pelo site está sendo configurado.</p>
-        <p class="mt-1 text-tinta-suave">Enquanto isso, mande seu pedido pelo nosso Instagram, que a equipe de intercessão vai orar por você.</p>
-        <a href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn btn-escuro mt-3"><Icone nome="instagram" class="size-4" /> Enviar pelo Instagram</a>
+        <p data-titulo class="font-bold"></p>
+        <p data-texto class="mt-1 text-tinta-suave"></p>
+        <a data-insta hidden href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn btn-escuro mt-3"><Icone nome="instagram" class="size-4" /> Enviar pelo Instagram</a>
       </div>
     </form>
 
@@ -64,11 +65,27 @@ const migalhas = [{ nome: 'Pedido de oração', url: '/oracao/' }];
 </Base>
 
 <script>
-  // TODO (publicação): enviar para uma Cloudflare Function que grava no banco (D1) e avisa a equipe.
-  document.getElementById('form-oracao')!.addEventListener('submit', (e) => {
+  const form = document.getElementById('form-oracao') as HTMLFormElement;
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const botao = form.querySelector('button')!;
     const aviso = document.getElementById('aviso')!;
-    aviso.hidden = false;
-    aviso.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    botao.disabled = true;
+    try {
+      const r = await fetch('/api/oracao/', { method: 'POST', body: new FormData(form) });
+      if (!r.ok) throw new Error();
+      form.querySelectorAll('input:not([type=checkbox]), textarea').forEach((el) => ((el as HTMLInputElement).value = ''));
+      aviso.querySelector('[data-titulo]')!.textContent = 'Recebemos o seu pedido.';
+      aviso.querySelector('[data-texto]')!.textContent = 'A equipe de intercessão vai orar por você. Deus está cuidando de cada detalhe.';
+      aviso.querySelector('[data-insta]')!.setAttribute('hidden', '');
+    } catch {
+      aviso.querySelector('[data-titulo]')!.textContent = 'Não conseguimos enviar agora.';
+      aviso.querySelector('[data-texto]')!.textContent = 'Tente de novo em instantes ou mande seu pedido pelo nosso Instagram.';
+      aviso.querySelector('[data-insta]')!.removeAttribute('hidden');
+    } finally {
+      botao.disabled = false;
+      aviso.hidden = false;
+      aviso.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   });
 </script>

@@ -1,0 +1,216 @@
+---
+// Editor de um story: telas (slides) com foto ou cor, textos, versículo e botão, com prévia ao vivo.
+export const prerender = false;
+import '../../../styles/stories.css';
+import Admin from '../../../layouts/Admin.astro';
+import { um, executar } from '../../../lib/admin/db';
+import { limparCacheStories } from '../../../lib/admin/stories';
+
+type Linha = { id: number; chave: string; titulo: string; capa: string; slides: string; ativo: number };
+const id = Number(Astro.url.searchParams.get('id')) || 0;
+let erro = '';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const titulo = String(f.get('titulo') ?? '').trim();
+  try {
+    const slides = JSON.parse(String(f.get('slides') ?? '[]'));
+    if (!titulo) throw new Error('Dê um nome ao story.');
+    if (!Array.isArray(slides) || !slides.length) throw new Error('Adicione pelo menos uma tela.');
+    // Capa (bolinha): a primeira foto do story; sem foto, a cor da primeira tela
+    const capa = slides.find((s: { foto?: string }) => s.foto)?.foto || slides[0].fundo || '';
+    if (id) await executar("UPDATE stories SET titulo = ?, capa = ?, slides = ?, atualizado_em = datetime('now') WHERE id = ?", titulo, capa, JSON.stringify(slides), id);
+    else await executar('INSERT INTO stories (chave, titulo, capa, slides, ordem) VALUES (?, ?, ?, ?, 999)', `s${Date.now().toString(36)}`, titulo, capa, JSON.stringify(slides));
+    await limparCacheStories(Astro.url);
+    return Astro.redirect('/admin/stories/?ok=Story+salvo.');
+  } catch (e) {
+    erro = e instanceof Error ? e.message : String(e);
+  }
+}
+
+const s = id ? await um<Linha>('SELECT * FROM stories WHERE id = ?', id) : null;
+const inicial = s ? s.slides : JSON.stringify([{ fundo: 'linear-gradient(160deg, #fff6ea 0%, #ffe2bd 100%)', cor: '#2a1d16', vpos: 'center', titulo: 'Título do story' }]);
+const FUNDOS = [
+  ['Creme', 'linear-gradient(160deg, #fff6ea 0%, #ffe2bd 100%)', '#2a1d16'],
+  ['Laranja', 'linear-gradient(160deg, #ffb347 0%, #fb8300 55%, #c25a00 100%)', '#2a1d16'],
+  ['Escuro', 'linear-gradient(160deg, #3b2a20 0%, #1a120d 100%)', '#ffffff'],
+  ['Pôr do sol', 'linear-gradient(170deg, #fdba74 0%, #f97316 45%, #7c2d12 100%)', '#ffffff'],
+  ['Céu', 'linear-gradient(170deg, #bae6fd 0%, #7dd3fc 50%, #0369a1 100%)', '#0b1f33'],
+];
+---
+<Admin titulo={s ? `Story: ${s.titulo}` : 'Novo story'}>
+  <a slot="acoes" href="/admin/stories/" class="btn btn-contorno">Voltar</a>
+  {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
+  <form method="post" id="editor" data-slides={inicial} data-fundos={JSON.stringify(FUNDOS)}>
+    <input type="hidden" name="slides" />
+    <div class="grid gap-6 lg:grid-cols-[1fr_20rem]">
+      <div class="space-y-5">
+        <div class="adm-card flex flex-wrap items-end gap-4">
+          <label class="adm-rotulo min-w-48 flex-1">Nome do story (aparece no topo)<input name="titulo" required class="adm-campo" value={s?.titulo} placeholder="Ex.: Culto de domingo" /></label>
+          <button class="btn btn-primario">Salvar story</button>
+        </div>
+        <div data-abas class="flex flex-wrap gap-2"></div>
+        <div data-campos class="adm-card grid gap-4 sm:grid-cols-2"></div>
+      </div>
+      <div class="lg:sticky lg:top-6 lg:self-start">
+        <div class="mx-auto aspect-[9/16] w-full max-w-[20rem] overflow-hidden rounded-[1.6rem] bg-tinta shadow-xl" data-previa></div>
+        <p class="mt-2 text-center text-xs text-tinta-suave">Prévia da tela selecionada</p>
+      </div>
+    </div>
+  </form>
+
+  <dialog id="galeria" class="m-auto w-[min(94vw,46rem)] rounded-3xl p-5 backdrop:bg-tinta/60">
+    <div class="flex items-center justify-between gap-3">
+      <h3 class="text-lg font-extrabold">Escolher foto</h3>
+      <label class="btn btn-escuro adm-btn-p cursor-pointer">Enviar do computador<input type="file" accept="image/*" hidden data-upload /></label>
+    </div>
+    <div data-fotos class="mt-4 grid max-h-[60vh] grid-cols-3 gap-2 overflow-auto sm:grid-cols-5">Carregando…</div>
+    <form method="dialog" class="mt-4 text-right"><button class="btn btn-contorno">Fechar</button></form>
+  </dialog>
+</Admin>
+
+<script>
+  import { renderSlide } from '../../../scripts/stories/render';
+  import { interpretarReferencia, formatarReferencia } from '../../../lib/referencia';
+  import type { Slide } from '../../../scripts/stories/tipos';
+
+  const form = document.getElementById('editor') as HTMLFormElement;
+  const slides: Slide[] = JSON.parse(form.dataset.slides!);
+  const FUNDOS: [string, string, string][] = JSON.parse(form.dataset.fundos!);
+  const abas = form.querySelector<HTMLElement>('[data-abas]')!;
+  const campos = form.querySelector<HTMLElement>('[data-campos]')!;
+  const previa = form.querySelector<HTMLElement>('[data-previa]')!;
+  let atual = 0;
+
+  const h = (html: string) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild as HTMLElement; };
+  const esc = (s = '') => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+  function desenharPrevia() { previa.replaceChildren(renderSlide(slides[atual] ?? {})); }
+
+  function desenharAbas() {
+    abas.replaceChildren(...slides.map((_, i) => {
+      const b = h(`<button type="button" class="btn adm-btn-p ${i === atual ? 'btn-escuro' : 'btn-contorno'}">Tela ${i + 1}</button>`);
+      b.onclick = () => { atual = i; tudo(); };
+      return b;
+    }), (() => { const b = h('<button type="button" class="btn btn-contorno adm-btn-p">+ Tela</button>'); b.onclick = () => { slides.push({ ...slides[atual], verso: undefined, botao: undefined }); atual = slides.length - 1; tudo(); }; return b; })());
+  }
+
+  function campo(rotulo: string, html: string, largo = false) {
+    return `<label class="adm-rotulo ${largo ? 'sm:col-span-2' : ''}">${rotulo}${html}</label>`;
+  }
+
+  function desenharCampos() {
+    const s = slides[atual];
+    campos.innerHTML = `
+      <div class="sm:col-span-2">
+        <span class="adm-rotulo">Fundo</span>
+        <div class="mt-1.5 flex flex-wrap items-center gap-2">
+          <button type="button" data-foto class="btn btn-escuro adm-btn-p">${s.foto ? 'Trocar foto' : 'Usar foto'}</button>
+          ${FUNDOS.map(([n, g], i) => `<button type="button" data-fundo="${i}" title="${n}" class="size-8 rounded-full ring-2 ${!s.foto && s.fundo === g ? 'ring-laranja-500' : 'ring-transparent'}" style="background:${g}"></button>`).join('')}
+        </div>
+        ${s.foto ? `<div class="mt-3 flex items-center gap-3"><span class="text-sm">Escurecer a foto</span><input type="range" min="0" max="80" step="5" data-k="escurecer" value="${s.escurecer ?? 35}" class="flex-1 accent-laranja-500"><button type="button" data-tirar-foto class="text-xs font-bold text-red-700">Tirar foto</button></div>` : ''}
+      </div>
+      ${campo('Chamada (texto pequeno em cima)', `<input data-k="eyebrow" class="adm-campo" value="${esc(s.eyebrow)}">`)}
+      ${campo('Título', `<input data-k="titulo" class="adm-campo" value="${esc(s.titulo)}">`)}
+      ${campo('Texto', `<textarea data-k="texto" rows="2" class="adm-campo">${esc(s.texto)}</textarea>`, true)}
+      <div class="grid gap-2 rounded-2xl bg-creme p-4 sm:col-span-2 sm:grid-cols-[1fr_auto]">
+        ${campo('Versículo (referência)', `<input data-verso-ref class="adm-campo" value="${esc(s.verso?.referencia)}" placeholder="Ex.: Salmos 23:1">`)}
+        <button type="button" data-buscar class="btn btn-escuro adm-btn-p self-end">Buscar texto</button>
+        ${campo('Texto do versículo', `<textarea data-verso-texto rows="2" class="adm-campo">${esc(s.verso?.texto)}</textarea>`, true)}
+      </div>
+      ${campo('Botão: texto', `<input data-botao="rotulo" class="adm-campo" value="${esc(s.botao?.rotulo)}" placeholder="Ex.: Ver horários">`)}
+      ${campo('Botão: link', `<input data-botao="href" class="adm-campo" value="${esc(s.botao?.href)}" placeholder="/cultos/">`)}
+      ${campo('Posição do texto', `<select data-k="vpos" class="adm-campo">${[['bottom', 'Embaixo'], ['center', 'No meio'], ['top', 'Em cima']].map(([v, r]) => `<option value="${v}" ${(s.vpos ?? 'bottom') === v ? 'selected' : ''}>${r}</option>`).join('')}</select>`)}
+      ${campo('Alinhamento', `<select data-k="alinhar" class="adm-campo">${[['left', 'À esquerda'], ['center', 'Centralizado']].map(([v, r]) => `<option value="${v}" ${(s.alinhar ?? 'left') === v ? 'selected' : ''}>${r}</option>`).join('')}</select>`)}
+      ${campo('Cor do texto', `<input type="color" data-k="cor" value="${s.cor ?? '#ffffff'}" class="mt-1.5 h-10 w-full rounded-xl">`)}
+      ${campo('Tempo na tela (segundos)', `<input type="number" min="3" max="20" data-k="duracao" value="${s.duracao ?? 6}" class="adm-campo">`)}
+      <div class="flex gap-2 sm:col-span-2">
+        <button type="button" data-mover="-1" class="btn btn-contorno adm-btn-p" ${atual === 0 ? 'disabled' : ''}>← Mover</button>
+        <button type="button" data-mover="1" class="btn btn-contorno adm-btn-p" ${atual === slides.length - 1 ? 'disabled' : ''}>Mover →</button>
+        <button type="button" data-excluir class="btn btn-contorno adm-btn-p ml-auto text-red-700" ${slides.length === 1 ? 'disabled' : ''}>Excluir tela</button>
+      </div>`;
+  }
+
+  function tudo() { desenharAbas(); desenharCampos(); desenharPrevia(); }
+
+  // Edição dos campos
+  campos.addEventListener('input', (e) => {
+    const el = e.target as HTMLInputElement, s = slides[atual];
+    if (el.dataset.k) {
+      const k = el.dataset.k as keyof Slide;
+      const v = el.type === 'range' || el.type === 'number' ? Number(el.value) : el.value;
+      (s as Record<string, unknown>)[k] = v === '' ? undefined : v;
+    } else if (el.dataset.botao) {
+      const b = { rotulo: s.botao?.rotulo ?? '', href: s.botao?.href ?? '', [el.dataset.botao]: el.value };
+      s.botao = b.rotulo && b.href ? b : undefined;
+    } else if ('versoRef' in el.dataset || 'versoTexto' in el.dataset) {
+      const ref = campos.querySelector<HTMLInputElement>('[data-verso-ref]')!.value.trim();
+      const texto = campos.querySelector<HTMLTextAreaElement>('[data-verso-texto]')!.value.trim();
+      s.verso = ref && texto ? { referencia: ref, texto } : undefined;
+    }
+    desenharPrevia();
+  });
+
+  let biblia: { slug: string; capitulos: string[][] }[] | null = null;
+  campos.addEventListener('click', async (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('button');
+    if (!b) return;
+    const s = slides[atual];
+    if (b.dataset.fundo !== undefined) {
+      const [, g, cor] = FUNDOS[Number(b.dataset.fundo)];
+      s.foto = undefined; s.fundo = g; s.cor = cor; s.escurecer = undefined;
+      tudo();
+    } else if ('foto' in b.dataset) abrirGaleria();
+    else if ('tirarFoto' in b.dataset) { s.foto = undefined; s.fundo ??= FUNDOS[0][1]; tudo(); }
+    else if ('buscar' in b.dataset) {
+      const r = interpretarReferencia(campos.querySelector<HTMLInputElement>('[data-verso-ref]')!.value);
+      if (!r) return alert('Referência não encontrada. Ex.: João 3:16');
+      biblia ??= await fetch('/dados/biblia.json').then((x) => x.json());
+      const caps = biblia!.find((l) => l.slug === r.livro.slug)?.capitulos[r.cap - 1] ?? [];
+      const ini = r.vIni ?? 1, fim = r.vFim ?? r.vIni ?? caps.length;
+      const texto = caps.slice(ini - 1, fim).join(' ');
+      if (!texto) return alert('Versículo não encontrado.');
+      s.verso = { referencia: formatarReferencia(r), texto };
+      tudo();
+    } else if (b.dataset.mover) {
+      const j = atual + Number(b.dataset.mover);
+      [slides[atual], slides[j]] = [slides[j], slides[atual]];
+      atual = j; tudo();
+    } else if ('excluir' in b.dataset && confirm('Excluir esta tela?')) {
+      slides.splice(atual, 1); atual = Math.max(0, atual - 1); tudo();
+    }
+  });
+
+  // Galeria de fotos do site + upload
+  const galeria = document.getElementById('galeria') as HTMLDialogElement;
+  const grade = galeria.querySelector<HTMLElement>('[data-fotos]')!;
+  let fotos: { nome: string; foto: string; mini: string }[] | null = null;
+  function escolher(url: string) {
+    const s = slides[atual];
+    s.foto = url; s.fundo = undefined; s.cor = '#ffffff'; s.escurecer ??= 35;
+    galeria.close(); tudo();
+  }
+  async function abrirGaleria() {
+    galeria.showModal();
+    fotos ??= await fetch('/dados/fotos.json').then((r) => r.json());
+    grade.replaceChildren(...fotos!.map((f) => {
+      const b = h(`<button type="button" class="aspect-square overflow-hidden rounded-xl ring-laranja-500 hover:ring-2"><img src="${f.mini}" alt="${esc(f.nome)}" loading="lazy" class="size-full object-cover"></button>`);
+      b.onclick = () => escolher(f.foto);
+      return b;
+    }));
+  }
+  galeria.querySelector<HTMLInputElement>('[data-upload]')!.addEventListener('change', async (e) => {
+    const arq = (e.target as HTMLInputElement).files?.[0];
+    if (!arq) return;
+    const fd = new FormData(); fd.append('arquivo', arq);
+    grade.textContent = 'Enviando…';
+    const r = await fetch('/api/admin/midia/', { method: 'POST', body: fd }).then((x) => x.json());
+    if (r.erro) { alert(r.erro); fotos = null; return abrirGaleria(); }
+    escolher(r.url);
+  });
+
+  form.addEventListener('submit', () => {
+    (form.elements.namedItem('slides') as HTMLInputElement).value = JSON.stringify(slides);
+  });
+  tudo();
+</script>

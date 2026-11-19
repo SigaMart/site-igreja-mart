@@ -1,0 +1,171 @@
+---
+// Campos para montar uma mensagem de WhatsApp: canal, destinatários, texto formatado, mídia e horário.
+// Usado em "Novo envio" e nos lembretes do calendário. Precisa estar dentro de um <form enctype="multipart/form-data">.
+import { todos } from '../../lib/admin/db';
+import { listaEtiquetas } from '../../lib/admin/contatos';
+import { LIMITE_MB } from '../../lib/admin/midia';
+
+interface Props { corpo?: string; quando?: string; titulo?: string; mostrarTitulo?: boolean }
+const { corpo = '', quando = '', titulo = '', mostrarTitulo = true } = Astro.props;
+const canais = await todos<{ id: number; nome: string }>('SELECT id, nome FROM canais ORDER BY id');
+const etiquetas = await listaEtiquetas();
+const contatos = await todos<{ id: number; nome: string; telefone: string }>("SELECT id, nome, telefone FROM contatos WHERE aceita_whatsapp = 1 AND telefone != '' ORDER BY nome LIMIT 2000");
+---
+<div class="compositor grid gap-5" data-compositor>
+  {!canais.length && <p class="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum canal configurado. <a href="/admin/configuracoes/" class="underline">Adicione um número em Configurações</a>.</p>}
+  <div class="grid gap-4 sm:grid-cols-2">
+    {mostrarTitulo && <label class="adm-rotulo">Título (só para você)<input name="titulo" class="adm-campo" value={titulo} placeholder="Ex.: Convite culto de domingo" /></label>}
+    <label class="adm-rotulo">Enviar pelo número
+      <select name="canal_id" required class="adm-campo" data-canal>
+        {canais.map((c) => <option value={c.id}>{c.nome}</option>)}
+      </select>
+    </label>
+  </div>
+
+  <fieldset class="rounded-2xl border border-tinta/10 p-4">
+    <legend class="px-1 text-sm font-bold">Para quem</legend>
+    <div class="grid gap-5 lg:grid-cols-2">
+      <div>
+        <p class="text-sm font-bold">Grupos do WhatsApp</p>
+        <div data-grupos class="mt-2 max-h-56 space-y-1 overflow-auto rounded-xl bg-creme p-3 text-sm text-tinta-suave">Escolha o número para carregar os grupos…</div>
+      </div>
+      <div class="space-y-3 text-sm">
+        <p class="font-bold">Contatos</p>
+        <label class="flex items-center gap-2"><input type="radio" name="contatos_modo" value="" checked class="accent-laranja-500" /> Nenhum (só grupos)</label>
+        <label class="flex items-center gap-2"><input type="radio" name="contatos_modo" value="todos" class="accent-laranja-500" /> Todos que aceitam mensagens</label>
+        <label class="flex items-center gap-2"><input type="radio" name="contatos_modo" value="etiquetas" class="accent-laranja-500" /> Por etiqueta:</label>
+        <div class="flex flex-wrap gap-2 pl-6">
+          {etiquetas.length ? etiquetas.map((e) => (
+            <label class="adm-selo cursor-pointer border border-tinta/10 bg-white has-checked:border-laranja-400 has-checked:bg-laranja-50">
+              <input type="checkbox" name="etiquetas" value={e.nome} class="accent-laranja-500" /> {e.nome} ({e.n})
+            </label>
+          )) : <span class="text-xs text-tinta-suave">Sem etiquetas ainda.</span>}
+        </div>
+        <details>
+          <summary class="cursor-pointer font-bold text-laranja-700">Escolher pessoas específicas</summary>
+          <input data-filtro placeholder="Filtrar…" class="adm-campo" />
+          <div class="mt-2 max-h-48 space-y-1 overflow-auto rounded-xl bg-creme p-3">
+            {contatos.map((c) => <label class="flex items-center gap-2" data-nome={c.nome.toLowerCase()}><input type="checkbox" name="contatos" value={c.id} class="accent-laranja-500" /> {c.nome}</label>)}
+          </div>
+        </details>
+        <label class="adm-rotulo">Outros números<textarea name="numeros" rows="2" class="adm-campo" placeholder="11987654321, 11912345678"></textarea></label>
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="grid gap-5 lg:grid-cols-[1fr_18rem]">
+    <div>
+      <div class="flex items-end justify-between gap-2">
+        <span class="adm-rotulo">Mensagem</span>
+        <span class="flex gap-1" data-barra>
+          <button type="button" data-marca="*" class="btn btn-contorno adm-btn-p font-extrabold" title="Negrito">B</button>
+          <button type="button" data-marca="_" class="btn btn-contorno adm-btn-p italic" title="Itálico">I</button>
+          <button type="button" data-marca="~" class="btn btn-contorno adm-btn-p line-through" title="Riscado">S</button>
+          <button type="button" data-marca="```" class="btn btn-contorno adm-btn-p font-mono" title="Monoespaçado">{'</>'}</button>
+          <button type="button" data-nome class="btn btn-contorno adm-btn-p" title="Primeiro nome da pessoa">{'{nome}'}</button>
+        </span>
+      </div>
+      <textarea name="corpo" rows="9" class="adm-campo" data-corpo placeholder="Escreva a mensagem…">{corpo}</textarea>
+      <span class="adm-dica">*negrito*, _itálico_, ~riscado~. Use {'{nome}'} para colocar o primeiro nome de cada contato.</span>
+      <label class="adm-rotulo mt-4">Imagem, vídeo, áudio ou arquivo (até {LIMITE_MB} MB)
+        <input type="file" name="midia" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx" class="adm-campo file:mr-3 file:rounded-full file:border-0 file:bg-tinta file:px-3 file:py-1 file:text-xs file:font-bold file:text-white" data-midia />
+      </label>
+    </div>
+    <div>
+      <span class="adm-rotulo">Prévia</span>
+      <div class="mt-1.5 rounded-2xl bg-[#efeae2] p-3">
+        <div class="ml-auto max-w-full rounded-xl rounded-tr-sm bg-[#d9fdd3] p-2 text-[0.9rem] leading-snug shadow-sm">
+          <div data-previa-midia></div>
+          <div data-previa class="break-words whitespace-pre-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <fieldset class="grid gap-4 rounded-2xl border border-tinta/10 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-end">
+    <legend class="px-1 text-sm font-bold">Quando</legend>
+    <div class="flex gap-4 text-sm">
+      <label class="flex items-center gap-2"><input type="radio" name="quando" value="agora" checked={!quando} class="accent-laranja-500" /> Agora</label>
+      <label class="flex items-center gap-2"><input type="radio" name="quando" value="agendar" checked={!!quando} class="accent-laranja-500" /> Agendar</label>
+    </div>
+    <label class="adm-rotulo">Data e hora (Brasília)<input type="datetime-local" name="agendado_para" value={quando} class="adm-campo" /></label>
+    <label class="adm-rotulo">Intervalo entre mensagens<select name="intervalo" class="adm-campo">
+      {[[5, '5 s'], [8, '8 s (recomendado)'], [15, '15 s'], [30, '30 s'], [60, '1 min']].map(([v, r]) => <option value={v} selected={v === 8}>{r}</option>)}
+    </select></label>
+  </fieldset>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-compositor]').forEach((raiz) => {
+    const corpo = raiz.querySelector<HTMLTextAreaElement>('[data-corpo]')!;
+    const previa = raiz.querySelector<HTMLElement>('[data-previa]')!;
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+    const formatar = (s: string) => esc(s)
+      .replace(/```([\s\S]+?)```/g, '<code class="font-mono">$1</code>')
+      .replace(/(^|[\s(])\*(\S(?:.*?\S)?)\*(?=[\s).,!?:;]|$)/gm, '$1<b>$2</b>')
+      .replace(/(^|[\s(])_(\S(?:.*?\S)?)_(?=[\s).,!?:;]|$)/gm, '$1<i>$2</i>')
+      .replace(/(^|[\s(])~(\S(?:.*?\S)?)~(?=[\s).,!?:;]|$)/gm, '$1<s>$2</s>')
+      .replace(/\{nome\}/g, '<span class="rounded bg-white/70 px-1">Maria</span>');
+    const atualizar = () => { previa.innerHTML = formatar(corpo.value) || '<span class="text-tinta-suave">A mensagem aparece aqui.</span>'; };
+    corpo.addEventListener('input', atualizar);
+    atualizar();
+
+    // Botões de formatação: envolvem o trecho selecionado
+    raiz.querySelectorAll<HTMLButtonElement>('[data-marca]').forEach((b) => b.addEventListener('click', () => {
+      const m = b.dataset.marca!, { selectionStart: a, selectionEnd: z, value: v } = corpo;
+      corpo.setRangeText(m + (v.slice(a, z) || 'texto') + m, a, z, 'select');
+      corpo.focus(); atualizar();
+    }));
+    raiz.querySelector('[data-nome]')!.addEventListener('click', () => {
+      corpo.setRangeText('{nome}', corpo.selectionStart, corpo.selectionEnd, 'end'); corpo.focus(); atualizar();
+    });
+
+    // Prévia da mídia
+    const midia = raiz.querySelector<HTMLInputElement>('[data-midia]')!;
+    const pm = raiz.querySelector<HTMLElement>('[data-previa-midia]')!;
+    midia.addEventListener('change', () => {
+      const f = midia.files?.[0];
+      pm.replaceChildren();
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      const el = f.type.startsWith('image/') ? Object.assign(document.createElement('img'), { src: url })
+        : f.type.startsWith('video/') ? Object.assign(document.createElement('video'), { src: url, controls: true })
+        : f.type.startsWith('audio/') ? Object.assign(document.createElement('audio'), { src: url, controls: true })
+        : Object.assign(document.createElement('p'), { textContent: '📄 ' + f.name });
+      el.className = 'mb-1.5 w-full rounded-lg';
+      pm.append(el);
+    });
+
+    // Filtro de pessoas
+    raiz.querySelector<HTMLInputElement>('[data-filtro]')?.addEventListener('input', (e) => {
+      const q = (e.target as HTMLInputElement).value.toLowerCase();
+      raiz.querySelectorAll<HTMLElement>('[data-nome]').forEach((l) => { if (l.tagName === 'LABEL') l.hidden = !l.dataset.nome!.includes(q); });
+    });
+
+    // Grupos do número escolhido
+    const canal = raiz.querySelector<HTMLSelectElement>('[data-canal]')!;
+    const caixa = raiz.querySelector<HTMLElement>('[data-grupos]')!;
+    const carregar = async () => {
+      if (!canal.value) return;
+      caixa.textContent = 'Carregando grupos…';
+      try {
+        const r = await fetch(`/api/admin/canal/?id=${canal.value}&acao=grupos`).then((x) => x.json());
+        if (r.erro) throw new Error(r.erro);
+        if (!r.length) { caixa.textContent = 'Este número não está em nenhum grupo.'; return; }
+        caixa.innerHTML = '';
+        for (const g of r as { id: string; nome: string }[]) {
+          const l = document.createElement('label');
+          l.className = 'flex items-center gap-2 text-tinta';
+          l.innerHTML = `<input type="checkbox" name="grupos" class="accent-laranja-500"> <span></span>`;
+          (l.querySelector('input') as HTMLInputElement).value = `${g.id}|${g.nome}`;
+          l.querySelector('span')!.textContent = g.nome;
+          caixa.append(l);
+        }
+      } catch (e) {
+        caixa.textContent = 'Não foi possível carregar os grupos: ' + (e as Error).message;
+      }
+    };
+    canal.addEventListener('change', carregar);
+    carregar();
+  });
+</script>

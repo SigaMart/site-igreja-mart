@@ -1,0 +1,85 @@
+---
+// Layout do painel administrativo (menu lateral, sem indexação).
+import '../styles/global.css';
+import '../styles/admin.css';
+import Icone from '../components/Icone.astro';
+import logo from '../assets/logo/logo-clara.png';
+import { getImage } from 'astro:assets';
+
+interface Props { titulo: string; acoes?: boolean }
+const { titulo } = Astro.props;
+const usuario = Astro.locals.usuario;
+const logoImg = await getImage({ src: logo, width: 96 });
+
+const MENU = [
+  { href: '/admin/', rotulo: 'Início', icone: 'painel' },
+  { href: '/admin/calendario/', rotulo: 'Calendário', icone: 'calendario' },
+  { href: '/admin/whatsapp/', rotulo: 'WhatsApp', icone: 'whatsapp' },
+  { href: '/admin/contatos/', rotulo: 'Contatos', icone: 'usuarios' },
+  { href: '/admin/oracao/', rotulo: 'Pedidos de oração', icone: 'maos' },
+  { href: '/admin/stories/', rotulo: 'Stories', icone: 'imagem' },
+  { href: '/admin/devocionais/', rotulo: 'Devocionais', icone: 'sol' },
+  { href: '/admin/blog/', rotulo: 'Blog', icone: 'lapis' },
+  { href: '/admin/biblia/', rotulo: 'Bíblia', icone: 'livro' },
+  { href: '/admin/configuracoes/', rotulo: 'Configurações', icone: 'engrenagem' },
+] as const;
+const atual = Astro.url.pathname;
+const ativo = (href: string) => (href === '/admin/' ? atual === href : atual.startsWith(href));
+const ok = Astro.url.searchParams.get('ok');
+const erro = Astro.url.searchParams.get('erro');
+---
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{titulo} · Painel MART</title>
+    <link rel="icon" href="/favicon-32.png" />
+  </head>
+  <body class="min-h-screen bg-creme font-sans text-tinta antialiased">
+    <div class="lg:grid lg:min-h-screen lg:grid-cols-[15rem_1fr]">
+      <aside class="border-b border-tinta/8 bg-white lg:sticky lg:top-0 lg:h-screen lg:border-r lg:border-b-0">
+        <details class="group lg:contents" open>
+          <summary class="flex cursor-pointer list-none items-center gap-3 px-5 py-4 lg:pointer-events-none">
+            <img src={logoImg.src} alt="" class="h-8 w-auto" />
+            <span class="leading-tight"><b class="block text-sm">Igreja MART</b><span class="text-xs text-tinta-suave">Painel</span></span>
+            <span class="ml-auto lg:hidden"><Icone nome="menu" class="size-5" /></span>
+          </summary>
+          <nav class="space-y-0.5 px-3 pb-4">
+            {MENU.map((m) => (
+              <a href={m.href} class:list={['flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition', ativo(m.href) ? 'bg-laranja-50 text-laranja-700' : 'text-tinta-suave hover:bg-creme hover:text-tinta']}>
+                <Icone nome={m.icone} class="size-[1.1rem]" /> {m.rotulo}
+              </a>
+            ))}
+            <div class="mt-4 border-t border-tinta/8 pt-4 text-xs text-tinta-suave">
+              <p class="px-3">{usuario?.nome}</p>
+              <a href="/" target="_blank" class="mt-2 flex items-center gap-3 rounded-xl px-3 py-2 font-semibold hover:bg-creme"><Icone nome="globo" class="size-4" /> Ver o site</a>
+              <a href="/admin/entrar/?sair=1" class="flex items-center gap-3 rounded-xl px-3 py-2 font-semibold hover:bg-creme"><Icone nome="sair" class="size-4" /> Sair</a>
+            </div>
+          </nav>
+        </details>
+      </aside>
+      <main class="min-w-0 px-4 py-6 sm:px-8 sm:py-8">
+        <div class="mx-auto max-w-6xl">
+          <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-2xl font-extrabold tracking-tight">{titulo}</h1>
+            <slot name="acoes" />
+          </div>
+          {ok && <p class="mb-5 rounded-xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">{ok}</p>}
+          {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
+          <slot />
+        </div>
+      </main>
+    </div>
+    <script>
+      // Pede confirmação em botões com data-confirmar
+      document.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-confirmar]');
+        if (b && !confirm(b.dataset.confirmar!)) e.preventDefault();
+      });
+      // No celular o menu começa fechado
+      if (matchMedia('(max-width: 1023px)').matches) document.querySelector('aside details')?.removeAttribute('open');
+    </script>
+  </body>
+</html>

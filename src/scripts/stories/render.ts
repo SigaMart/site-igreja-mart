@@ -61,5 +61,7 @@ export function renderSlide(slide: Slide, aoClicar?: (href: string) => void) {
 
 /** Coloca a capa de um story num elemento (bolinha, avatar). */
 export function aplicarCapa(alvo: HTMLElement, capa: string) {
-  alvo.style.background = `center / cover no-repeat url("${capa.replace(/"/g, '')}")`;
+  // Capa pode ser uma foto ou uma cor/degradê (story sem foto)
+  if (/^(linear-gradient|#|rgb)/.test(capa)) alvo.style.background = capa;
+  else alvo.style.background = `center / cover no-repeat url("${capa.replace(/"/g, '')}")`;
 }

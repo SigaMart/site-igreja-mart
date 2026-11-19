@@ -1,0 +1,28 @@
+---
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import Compositor from '../../../components/admin/Compositor.astro';
+import { criarEnvio } from '../../../lib/admin/envios';
+import { fmtDataHora } from '../../../lib/admin/db';
+
+let erro = '';
+if (Astro.request.method === 'POST') {
+  try {
+    const r = await criarEnvio(await Astro.request.formData());
+    const quando = new Date(r.quando).getTime() <= Date.now() + 60_000 ? 'começa em até 1 minuto' : `agendado para ${fmtDataHora(r.quando)}`;
+    return Astro.redirect(`/admin/whatsapp/?ok=${encodeURIComponent(`Envio para ${r.total} destino(s) ${quando}.`)}`);
+  } catch (e) {
+    erro = e instanceof Error ? e.message : String(e);
+  }
+}
+---
+<Admin titulo="Nova mensagem">
+  {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
+  <form method="post" enctype="multipart/form-data" class="adm-card">
+    <Compositor />
+    <div class="mt-6 flex gap-2">
+      <button class="btn btn-primario">Salvar envio</button>
+      <a href="/admin/whatsapp/" class="btn btn-contorno">Cancelar</a>
+    </div>
+  </form>
+</Admin>

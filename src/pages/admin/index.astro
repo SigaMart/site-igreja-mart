@@ -1,0 +1,68 @@
+---
+export const prerender = false;
+import Admin from '../../layouts/Admin.astro';
+import Icone from '../../components/Icone.astro';
+import { todos, um, fmtDataHora, fmtSqlite } from '../../lib/admin/db';
+
+const n = async (sql: string, ...p: unknown[]) => (await um<{ n: number }>(sql, ...p))?.n ?? 0;
+const agora = new Date().toISOString();
+const semana = new Date(Date.now() + 7 * 86400_000).toISOString();
+
+const numeros = [
+  { rotulo: 'Pedidos de oração novos', valor: await n("SELECT COUNT(*) n FROM pedidos_oracao WHERE status = 'novo'"), href: '/admin/oracao/', icone: 'maos' },
+  { rotulo: 'Contatos', valor: await n('SELECT COUNT(*) n FROM contatos'), href: '/admin/contatos/', icone: 'usuarios' },
+  { rotulo: 'Envios agendados', valor: await n("SELECT COUNT(*) n FROM envios WHERE status IN ('agendado','enviando')"), href: '/admin/whatsapp/', icone: 'whatsapp' },
+  { rotulo: 'Itens nos próximos 7 dias', valor: await n('SELECT COUNT(*) n FROM eventos WHERE inicio BETWEEN ? AND ?', agora, semana), href: '/admin/calendario/', icone: 'calendario' },
+] as const;
+
+const proximos = await todos<{ id: number; titulo: string; inicio: string; cal: string; cor: string }>(
+  'SELECT e.id, e.titulo, e.inicio, c.nome cal, c.cor FROM eventos e JOIN calendarios c ON c.id = e.calendario_id WHERE e.inicio >= ? ORDER BY e.inicio LIMIT 6', agora);
+const pedidos = await todos<{ id: number; nome: string; motivo: string; pedido: string; criado_em: string }>(
+  "SELECT id, nome, motivo, pedido, criado_em FROM pedidos_oracao WHERE status = 'novo' ORDER BY id DESC LIMIT 4");
+const canais = await n('SELECT COUNT(*) n FROM canais');
+---
+<Admin titulo={`Olá, ${Astro.locals.usuario?.nome.split(' ')[0]}`}>
+  {!canais && (
+    <a href="/admin/configuracoes/" class="mb-6 flex items-center gap-3 rounded-2xl bg-laranja-50 p-4 text-sm font-semibold text-laranja-800">
+      <Icone nome="whatsapp" class="size-5" /> Conecte um número de WhatsApp em Configurações para agendar envios. <Icone nome="seta" class="ml-auto size-4" />
+    </a>
+  )}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {numeros.map((x) => (
+      <a href={x.href} class="adm-card flex items-center gap-4 transition hover:border-laranja-300">
+        <span class="flex size-11 items-center justify-center rounded-xl bg-laranja-50 text-laranja-700"><Icone nome={x.icone} /></span>
+        <span><b class="block text-2xl leading-none">{x.valor}</b><span class="text-xs text-tinta-suave">{x.rotulo}</span></span>
+      </a>
+    ))}
+  </div>
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-2">
+    <section class="adm-card">
+      <div class="flex items-center justify-between"><h2 class="font-extrabold">Próximos no calendário</h2><a href="/admin/calendario/" class="text-sm font-bold text-laranja-700">Ver tudo</a></div>
+      {proximos.length ? (
+        <ul class="mt-3 divide-y divide-tinta/8 text-sm">
+          {proximos.map((e) => (
+            <li class="flex items-center gap-3 py-2.5">
+              <span class="size-2.5 shrink-0 rounded-full" style={`background:${e.cor}`}></span>
+              <a href={`/admin/calendario/evento/?id=${e.id}`} class="flex-1 font-semibold hover:underline">{e.titulo}</a>
+              <span class="text-xs text-tinta-suave">{e.cal} · {fmtDataHora(e.inicio)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : <p class="adm-vazio mt-3">Nada agendado.</p>}
+    </section>
+    <section class="adm-card">
+      <div class="flex items-center justify-between"><h2 class="font-extrabold">Pedidos de oração novos</h2><a href="/admin/oracao/" class="text-sm font-bold text-laranja-700">Ver tudo</a></div>
+      {pedidos.length ? (
+        <ul class="mt-3 space-y-3 text-sm">
+          {pedidos.map((p) => (
+            <li class="rounded-xl bg-creme p-3">
+              <p class="text-xs text-tinta-suave"><b class="text-tinta">{p.nome || 'Anônimo'}</b> · {p.motivo} · {fmtSqlite(p.criado_em)}</p>
+              <p class="mt-1 line-clamp-2">{p.pedido}</p>
+            </li>
+          ))}
+        </ul>
+      ) : <p class="adm-vazio mt-3">Nenhum pedido novo.</p>}
+    </section>
+  </div>
+</Admin>

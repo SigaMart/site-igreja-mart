@@ -1,0 +1,237 @@
+---
+// Configurações: canais de WhatsApp (Evolution/GoWA), GitHub (para publicar conteúdo), endereço do site e usuários.
+export const prerender = false;
+import Admin from '../../layouts/Admin.astro';
+import Icone from '../../components/Icone.astro';
+import { SITE } from '../../config/site';
+import { todos, um, executar, lerConfig, gravarConfig } from '../../lib/admin/db';
+import { gerarHash, conferirSenha } from '../../lib/admin/auth';
+import { criarInstancia, type Canal } from '../../lib/admin/whatsapp';
+
+const eu = Astro.locals.usuario!;
+const voltar = (msg: string, tipo = 'ok') => Astro.redirect(`/admin/configuracoes/?${tipo}=${encodeURIComponent(msg)}${tipo === 'ok' ? '' : ''}`);
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const t = (k: string) => String(f.get(k) ?? '').trim();
+  try {
+    switch (t('acao')) {
+      case 'canal': {
+        const id = Number(t('id')) || 0;
+        const dados = [t('nome'), t('provedor'), t('url'), t('apikey') || null, t('instancia') || null, t('usuario') || null, t('senha') || null];
+        if (!dados[0] || !dados[2]) return voltar('Preencha o nome e o endereço do servidor.', 'erro');
+        if (id) {
+          // Campos de senha em branco mantêm o valor atual
+          const atual = await um<Canal>('SELECT * FROM canais WHERE id = ?', id);
+          if (!t('apikey')) dados[3] = atual?.apikey ?? null;
+          if (!t('senha')) dados[6] = atual?.senha ?? null;
+          await executar('UPDATE canais SET nome=?, provedor=?, url=?, apikey=?, instancia=?, usuario=?, senha=? WHERE id=?', ...dados, id);
+        } else {
+          await executar('INSERT INTO canais (nome, provedor, url, apikey, instancia, usuario, senha) VALUES (?,?,?,?,?,?,?)', ...dados);
+        }
+        const canal = await um<Canal>('SELECT * FROM canais WHERE nome = ? ORDER BY id DESC', dados[0]);
+        let aviso = '';
+        if (canal?.provedor === 'evolution' && canal.instancia) {
+          try { await criarInstancia(canal); } catch (e) { aviso = ` (não consegui criar a instância: ${String(e).slice(0, 120)})`; }
+        }
+        return voltar(`Canal salvo.${aviso}`);
+      }
+      case 'excluir-canal':
+        await executar('DELETE FROM canais WHERE id = ?', Number(t('id')));
+        return voltar('Canal excluído.');
+      case 'github':
+        await gravarConfig('github_repo', t('github_repo'));
+        await gravarConfig('github_branch', t('github_branch') || 'main');
+        if (t('github_token')) await gravarConfig('github_token', t('github_token'));
+        await gravarConfig('url_publica', t('url_publica'));
+        return voltar('Configurações salvas.');
+      case 'usuario': {
+        if (t('senha').length < 8) return voltar('A senha precisa ter pelo menos 8 caracteres.', 'erro');
+        await executar('INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)', t('nome'), t('email').toLowerCase(), await gerarHash(t('senha')));
+        return voltar('Usuário criado.');
+      }
+      case 'excluir-usuario':
+        if (Number(t('id')) === eu.id) return voltar('Você não pode excluir o seu próprio usuário.', 'erro');
+        await executar('DELETE FROM usuarios WHERE id = ?', Number(t('id')));
+        return voltar('Usuário excluído.');
+      case 'senha': {
+        const u = await um<{ senha: string }>('SELECT senha FROM usuarios WHERE id = ?', eu.id);
+        if (!u || !(await conferirSenha(t('atual'), u.senha))) return voltar('Senha atual incorreta.', 'erro');
+        if (t('nova').length < 8) return voltar('A nova senha precisa ter pelo menos 8 caracteres.', 'erro');
+        await executar('UPDATE usuarios SET senha = ? WHERE id = ?', await gerarHash(t('nova')), eu.id);
+        return voltar('Senha alterada.');
+      }
+    }
+  } catch (e) {
+    return voltar(String(e instanceof Error ? e.message : e).slice(0, 200), 'erro');
+  }
+}
+
+const canais = await todos<Canal>('SELECT * FROM canais ORDER BY id');
+const usuarios = await todos<{ id: number; nome: string; email: string }>('SELECT id, nome, email FROM usuarios ORDER BY nome');
+const editar = canais.find((c) => c.id === Number(Astro.url.searchParams.get('canal')));
+const repo = await lerConfig('github_repo', 'SigaMart/site-igreja-mart');
+const branch = await lerConfig('github_branch', 'main');
+const temToken = !!(await lerConfig('github_token'));
+const urlPub = await lerConfig('url_publica', SITE.urlPublica);
+---
+<Admin titulo="Configurações">
+  <div class="space-y-8">
+    <!-- CANAIS -->
+    <section class="adm-card">
+      <h2 class="text-lg font-extrabold">Canais de WhatsApp</h2>
+      <p class="mt-1 text-sm text-tinta-suave">Cada canal é um número conectado pela Evolution API ou pela GoWA. Você pode ter vários.</p>
+
+      {canais.length > 0 && (
+        <ul class="mt-5 divide-y divide-tinta/8">
+          {canais.map((c) => (
+            <li class="flex flex-wrap items-center gap-3 py-4" data-canal={c.id}>
+              <span class="flex size-10 items-center justify-center rounded-xl bg-green-50 text-green-700"><Icone nome="whatsapp" class="size-5" /></span>
+              <span class="min-w-0 flex-1 leading-tight">
+                <b class="block">{c.nome}</b>
+                <span class="text-xs text-tinta-suave">{c.provedor === 'evolution' ? 'Evolution API' : 'GoWA'} · {c.instancia || 'sem instância'} · {c.url}</span>
+              </span>
+              <span data-status class="adm-selo bg-tinta/5 text-tinta-suave">verificando…</span>
+              <button type="button" data-conectar class="btn btn-primario adm-btn-p">Conectar</button>
+              <button type="button" data-desconectar class="btn btn-contorno adm-btn-p">Desconectar</button>
+              <a href={`?canal=${c.id}#form-canal`} class="btn btn-contorno adm-btn-p">Editar</a>
+              <form method="post"><input type="hidden" name="acao" value="excluir-canal" /><input type="hidden" name="id" value={c.id} />
+                <button class="btn btn-contorno adm-btn-p text-red-700" data-confirmar={`Excluir o canal ${c.nome}?`}>Excluir</button></form>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form id="form-canal" method="post" class="mt-6 grid gap-4 rounded-2xl bg-creme p-5 sm:grid-cols-2">
+        <input type="hidden" name="acao" value="canal" />
+        <input type="hidden" name="id" value={editar?.id ?? ''} />
+        <p class="font-bold sm:col-span-2">{editar ? `Editar ${editar.nome}` : 'Adicionar canal'}</p>
+        <label class="adm-rotulo">Nome do canal<input name="nome" required class="adm-campo" value={editar?.nome} placeholder="Ex.: Secretaria" /></label>
+        <label class="adm-rotulo">Provedor
+          <select name="provedor" class="adm-campo" data-provedor>
+            <option value="evolution" selected={editar?.provedor !== 'gowa'}>Evolution API (v2)</option>
+            <option value="gowa" selected={editar?.provedor === 'gowa'}>GoWA</option>
+          </select>
+        </label>
+        <label class="adm-rotulo sm:col-span-2">Endereço do servidor (URL)<input name="url" type="url" required class="adm-campo" value={editar?.url} placeholder="https://api.seuservidor.com.br" /></label>
+        <label class="adm-rotulo">Instância<input name="instancia" class="adm-campo" value={editar?.instancia} placeholder="mart-secretaria" />
+          <span class="adm-dica">Evolution: nome da instância (é criada se não existir). GoWA: ID do aparelho, se usar vários.</span></label>
+        <label class="adm-rotulo" data-so="evolution">API key<input name="apikey" type="password" class="adm-campo" autocomplete="off" placeholder={editar?.apikey ? '•••••• (manter)' : ''} />
+          <span class="adm-dica">A chave global (AUTHENTICATION_API_KEY) ou a da instância.</span></label>
+        <label class="adm-rotulo" data-so="gowa">Usuário (basic auth)<input name="usuario" class="adm-campo" value={editar?.usuario} autocomplete="off" /></label>
+        <label class="adm-rotulo" data-so="gowa">Senha (basic auth)<input name="senha" type="password" class="adm-campo" autocomplete="off" placeholder={editar?.senha ? '•••••• (manter)' : ''} /></label>
+        <div class="flex gap-2 sm:col-span-2">
+          <button class="btn btn-escuro">Salvar canal</button>
+          {editar && <a href="/admin/configuracoes/" class="btn btn-contorno">Cancelar</a>}
+        </div>
+      </form>
+    </section>
+
+    <!-- GITHUB E SITE -->
+    <section class="adm-card">
+      <h2 class="text-lg font-extrabold">Publicação do site</h2>
+      <p class="mt-1 text-sm text-tinta-suave">Devocionais, blog e correções da Bíblia são salvos no GitHub, e a Cloudflare atualiza o site em cerca de 2 minutos.</p>
+      <form method="post" class="mt-5 grid gap-4 sm:grid-cols-2">
+        <input type="hidden" name="acao" value="github" />
+        <label class="adm-rotulo">Repositório<input name="github_repo" class="adm-campo" value={repo} /></label>
+        <label class="adm-rotulo">Branch<input name="github_branch" class="adm-campo" value={branch} /></label>
+        <label class="adm-rotulo sm:col-span-2">Token do GitHub<input name="github_token" type="password" class="adm-campo" autocomplete="off" placeholder={temToken ? '•••••• (já configurado; preencha só para trocar)' : 'github_pat_…'} />
+          <span class="adm-dica">Crie em GitHub → Settings → Developer settings → Fine-grained tokens, só para este repositório, com permissão “Contents: Read and write”.</span></label>
+        <label class="adm-rotulo sm:col-span-2">Endereço público do site<input name="url_publica" type="url" class="adm-campo" value={urlPub} />
+          <span class="adm-dica">Usado nos links de mídia enviados pelo WhatsApp. Troque quando o domínio igrejamart.com.br estiver no ar.</span></label>
+        <div class="sm:col-span-2"><button class="btn btn-escuro">Salvar</button></div>
+      </form>
+    </section>
+
+    <!-- USUÁRIOS -->
+    <section class="adm-card">
+      <h2 class="text-lg font-extrabold">Usuários do painel</h2>
+      <ul class="mt-4 divide-y divide-tinta/8">
+        {usuarios.map((u) => (
+          <li class="flex items-center gap-3 py-3 text-sm">
+            <span class="flex-1"><b>{u.nome}</b> <span class="text-tinta-suave">· {u.email}</span>{u.id === eu.id && <span class="adm-selo ml-2 bg-laranja-50 text-laranja-700">você</span>}</span>
+            {u.id !== eu.id && (
+              <form method="post"><input type="hidden" name="acao" value="excluir-usuario" /><input type="hidden" name="id" value={u.id} />
+                <button class="btn btn-contorno adm-btn-p text-red-700" data-confirmar={`Excluir ${u.nome}?`}>Excluir</button></form>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div class="mt-5 grid gap-6 lg:grid-cols-2">
+        <form method="post" class="grid gap-3 rounded-2xl bg-creme p-5">
+          <input type="hidden" name="acao" value="usuario" />
+          <p class="font-bold">Novo usuário</p>
+          <label class="adm-rotulo">Nome<input name="nome" required class="adm-campo" /></label>
+          <label class="adm-rotulo">E-mail<input name="email" type="email" required class="adm-campo" /></label>
+          <label class="adm-rotulo">Senha inicial<input name="senha" type="password" minlength="8" required class="adm-campo" autocomplete="new-password" /></label>
+          <div><button class="btn btn-escuro">Criar usuário</button></div>
+        </form>
+        <form method="post" class="grid gap-3 rounded-2xl bg-creme p-5">
+          <input type="hidden" name="acao" value="senha" />
+          <p class="font-bold">Trocar minha senha</p>
+          <label class="adm-rotulo">Senha atual<input name="atual" type="password" required class="adm-campo" autocomplete="current-password" /></label>
+          <label class="adm-rotulo">Nova senha<input name="nova" type="password" minlength="8" required class="adm-campo" autocomplete="new-password" /></label>
+          <div><button class="btn btn-escuro">Trocar senha</button></div>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <dialog id="qr" class="m-auto w-[min(92vw,24rem)] rounded-3xl p-6 backdrop:bg-tinta/60">
+    <h3 class="text-lg font-extrabold">Conectar WhatsApp</h3>
+    <p class="mt-1 text-sm text-tinta-suave">No celular: WhatsApp → Aparelhos conectados → Conectar aparelho, e aponte para o código.</p>
+    <div data-qr class="mt-4 flex min-h-64 items-center justify-center rounded-2xl bg-creme text-sm text-tinta-suave">Gerando QR code…</div>
+    <p data-codigo class="mt-3 text-center text-sm"></p>
+    <form method="dialog" class="mt-4 text-right"><button class="btn btn-contorno">Fechar</button></form>
+  </dialog>
+</Admin>
+
+<script>
+  type St = { conectado?: boolean; estado?: string; detalhe?: string; erro?: string };
+  const api = (id: string, acao: string, metodo = 'GET') => fetch(`/api/admin/canal/?id=${id}&acao=${acao}`, { method: metodo }).then((r) => r.json());
+
+  function pintar(li: HTMLElement, s: St) {
+    const el = li.querySelector<HTMLElement>('[data-status]')!;
+    if (s.erro) { el.textContent = 'erro'; el.title = s.erro; el.className = 'adm-selo bg-red-50 text-red-700'; return; }
+    el.title = s.detalhe ?? s.estado ?? '';
+    el.textContent = s.conectado ? 'conectado' : s.estado === 'connecting' ? 'conectando' : 'desconectado';
+    el.className = 'adm-selo ' + (s.conectado ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700');
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-canal]').forEach((li) => {
+    const id = li.dataset.canal!;
+    api(id, 'status').then((s) => pintar(li, s));
+
+    li.querySelector('[data-conectar]')!.addEventListener('click', async () => {
+      const dlg = document.getElementById('qr') as HTMLDialogElement;
+      const caixa = dlg.querySelector<HTMLElement>('[data-qr]')!, cod = dlg.querySelector<HTMLElement>('[data-codigo]')!;
+      caixa.textContent = 'Gerando QR code…'; cod.textContent = '';
+      dlg.showModal();
+      const r = await api(id, 'conectar');
+      if (r.erro) caixa.textContent = r.erro;
+      else if (r.qr) caixa.innerHTML = `<img src="${r.qr}" alt="QR code" class="size-64">`;
+      else caixa.textContent = r.mensagem ?? 'Sem QR code.';
+      if (r.codigo) cod.innerHTML = `Ou use o código: <b class="tracking-widest">${r.codigo}</b>`;
+      // Acompanha até conectar
+      const t = setInterval(async () => {
+        if (!dlg.open) return clearInterval(t);
+        const s = await api(id, 'status');
+        pintar(li, s);
+        if (s.conectado) { clearInterval(t); caixa.innerHTML = '<p class="text-base font-bold text-green-700">Conectado!</p>'; }
+      }, 4000);
+    });
+
+    li.querySelector('[data-desconectar]')!.addEventListener('click', async () => {
+      if (!confirm('Desconectar este número?')) return;
+      const r = await api(id, 'desconectar', 'POST');
+      if (r.erro) alert(r.erro);
+      api(id, 'status').then((s) => pintar(li, s));
+    });
+  });
+
+  // Mostra só os campos do provedor escolhido
+  const sel = document.querySelector<HTMLSelectElement>('[data-provedor]')!;
+  const mostrar = () => document.querySelectorAll<HTMLElement>('[data-so]').forEach((el) => { el.hidden = el.dataset.so !== sel.value; });
+  sel.addEventListener('change', mostrar);
+  mostrar();
+</script>

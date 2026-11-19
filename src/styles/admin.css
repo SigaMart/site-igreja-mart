@@ -1,0 +1,36 @@
+@reference './global.css';
+
+/* Componentes do painel administrativo */
+.adm-campo {
+  @apply mt-1.5 w-full rounded-xl border border-tinta/15 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-laranja-500 focus:ring-2 focus:ring-laranja-100;
+}
+.adm-rotulo {
+  @apply block text-sm font-bold;
+}
+.adm-dica {
+  @apply mt-1 block text-xs font-normal text-tinta-suave;
+}
+.adm-card {
+  @apply rounded-2xl border border-tinta/8 bg-white p-5 shadow-sm shadow-tinta/5 sm:p-6;
+}
+.adm-tabela {
+  @apply w-full text-left text-sm;
+}
+.adm-tabela th {
+  @apply border-b border-tinta/10 px-3 py-2.5 text-xs font-bold tracking-wide text-tinta-suave uppercase;
+}
+.adm-tabela td {
+  @apply border-b border-tinta/6 px-3 py-3 align-top;
+}
+.adm-tabela tr:hover td {
+  @apply bg-creme;
+}
+.adm-selo {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap;
+}
+.adm-btn-p {
+  @apply px-3 py-1.5 text-xs;
+}
+.adm-vazio {
+  @apply rounded-2xl border border-dashed border-tinta/15 p-10 text-center text-sm text-tinta-suave;
+}

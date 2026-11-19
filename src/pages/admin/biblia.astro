@@ -1,0 +1,118 @@
+---
+// Correção de versículos da Bíblia. As mudanças ficam em src/data/biblia-correcoes.json (no GitHub)
+// e são aplicadas em todo o site no próximo build (~2 minutos), sem mexer no arquivo original.
+export const prerender = false;
+import Admin from '../../layouts/Admin.astro';
+import { livros, interpretarReferencia } from '../../lib/referencia';
+import { ler, gravar } from '../../lib/admin/github';
+import { lerAsset } from '../../lib/admin/midia';
+
+const ARQUIVO = 'src/data/biblia-correcoes.json';
+const q = Astro.url.searchParams;
+
+// Ir direto para uma referência ("João 3:16")
+const ref = q.get('ref');
+if (ref) {
+  const r = interpretarReferencia(ref);
+  if (r) return Astro.redirect(`/admin/biblia/?livro=${r.livro.slug}&cap=${r.cap}${r.vIni ? `#v${r.vIni}` : ''}`);
+}
+
+const livro = livros.find((l) => l.slug === q.get('livro')) ?? livros.find((l) => l.slug === 'joao')!;
+const cap = Math.min(livro.caps, Math.max(1, Number(q.get('cap')) || 1));
+type Dados = { capitulos: string[][]; originais: Record<string, string> };
+const dados = await lerAsset<Dados>(Astro.url, `/dados/biblia/${livro.slug}.json`);
+
+let erro = '';
+let correcoes: Record<string, string> = {};
+let sha: string | undefined;
+try {
+  const arq = await ler(ARQUIVO);
+  if (arq) { correcoes = JSON.parse(arq.texto); sha = arq.sha; }
+} catch (e) { erro = e instanceof Error ? e.message : String(e); }
+
+// Texto original de cada versículo (antes de qualquer correção)
+const original = (v: number) => dados.originais[`${cap}/${v}`] ?? dados.capitulos[cap - 1][v - 1];
+
+if (Astro.request.method === 'POST' && !erro) {
+  const f = await Astro.request.formData();
+  let mudou = 0;
+  dados.capitulos[cap - 1].forEach((_, i) => {
+    const v = i + 1, k = `${livro.slug}/${cap}/${v}`;
+    const novo = String(f.get(`v${v}`) ?? '').replace(/\s+/g, ' ').trim();
+    if (!novo) return;
+    const atual = correcoes[k] ?? original(v);
+    if (novo === atual) return;
+    mudou++;
+    if (novo === original(v)) delete correcoes[k];
+    else correcoes[k] = novo;
+  });
+  if (!mudou) return Astro.redirect(`/admin/biblia/?livro=${livro.slug}&cap=${cap}&ok=Nada+mudou.`);
+  try {
+    const ordenado = Object.fromEntries(Object.entries(correcoes).sort(([a], [b]) => a.localeCompare(b, 'pt', { numeric: true })));
+    await gravar(ARQUIVO, JSON.stringify(ordenado, null, 2) + '\n', `Painel: corrige ${livro.nome} ${cap} (${mudou} versículo${mudou > 1 ? 's' : ''})`, sha);
+    return Astro.redirect(`/admin/biblia/?livro=${livro.slug}&cap=${cap}&ok=${encodeURIComponent(`${mudou} versículo(s) salvo(s). O site atualiza em cerca de 2 minutos.`)}`);
+  } catch (e) {
+    erro = e instanceof Error ? e.message : String(e);
+  }
+}
+
+const versos = dados.capitulos[cap - 1].map((_, i) => {
+  const v = i + 1, k = `${livro.slug}/${cap}/${v}`;
+  return { v, texto: correcoes[k] ?? original(v), corrigido: k in correcoes, original: original(v) };
+});
+const corrigidosNoLivro = Object.keys(correcoes).filter((k) => k.startsWith(livro.slug + '/')).length;
+---
+<Admin titulo="Bíblia">
+  {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
+  <div class="adm-card mb-6 flex flex-wrap items-end gap-3">
+    <form class="flex flex-wrap items-end gap-3">
+      <label class="adm-rotulo">Livro
+        <select name="livro" class="adm-campo w-auto" onchange="this.form.cap.value=1;this.form.submit()">
+          {livros.map((l) => <option value={l.slug} selected={l.slug === livro.slug}>{l.nome}</option>)}
+        </select>
+      </label>
+      <label class="adm-rotulo">Capítulo
+        <select name="cap" class="adm-campo w-auto" onchange="this.form.submit()">
+          {Array.from({ length: livro.caps }, (_, i) => <option selected={i + 1 === cap}>{i + 1}</option>)}
+        </select>
+      </label>
+    </form>
+    <form class="flex items-end gap-2 sm:ml-auto">
+      <label class="adm-rotulo">Ir para<input name="ref" placeholder="Ex.: João 3:16" class="adm-campo" /></label>
+      <button class="btn btn-escuro">Ir</button>
+    </form>
+  </div>
+
+  <form method="post" class="adm-card">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-lg font-extrabold">{livro.nome} {cap} {corrigidosNoLivro > 0 && <span class="adm-selo ml-2 bg-laranja-50 text-laranja-700">{corrigidosNoLivro} correção(ões) neste livro</span>}</h2>
+      <button class="btn btn-primario">Salvar correções</button>
+    </div>
+    <ol class="space-y-3">
+      {versos.map((x) => (
+        <li id={`v${x.v}`} class="grid scroll-mt-24 grid-cols-[2.25rem_1fr] gap-2">
+          <span class="pt-3 text-right text-sm font-extrabold text-laranja-700">{x.v}</span>
+          <div>
+            <textarea name={`v${x.v}`} rows="2" class:list={['adm-campo mt-0 field-sizing-content font-serif text-[0.95rem]', x.corrigido && 'border-laranja-400 bg-laranja-50/40']}>{x.texto}</textarea>
+            {x.corrigido && (
+              <p class="mt-1 text-xs text-tinta-suave">
+                Original: <span class="italic">{x.original}</span>
+                <button type="button" class="ml-1 font-bold text-laranja-700 underline" data-restaurar={x.original}>restaurar</button>
+              </p>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+    <div class="mt-6 flex justify-end"><button class="btn btn-primario">Salvar correções</button></div>
+  </form>
+  <p class="mt-4 text-xs text-tinta-suave">As correções ficam guardadas à parte do texto original da Bíblia Livre e valem para o site inteiro (páginas, busca, devocionais e stories).</p>
+</Admin>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-restaurar]').forEach((b) => b.addEventListener('click', () => {
+    const ta = b.closest('li')!.querySelector('textarea')!;
+    ta.value = b.dataset.restaurar!;
+    ta.focus();
+  }));
+</script>

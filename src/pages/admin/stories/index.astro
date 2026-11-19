@@ -1,0 +1,66 @@
+---
+// Lista de stories: ordem, ativar/desativar e importar os stories que já estão no site.
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import Icone from '../../../components/Icone.astro';
+import { banco, todos, executar } from '../../../lib/admin/db';
+import { limparCacheStories } from '../../../lib/admin/stories';
+import { lerAsset } from '../../../lib/admin/midia';
+import type { Story } from '../../../scripts/stories/tipos';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const id = Number(f.get('id'));
+  switch (f.get('acao')) {
+    case 'importar': {
+      const padrao = await lerAsset<Story[]>(Astro.url, '/dados/stories-padrao.json');
+      const db = await banco();
+      await db.batch(padrao.map((s, i) => db.prepare('INSERT OR IGNORE INTO stories (chave, titulo, capa, slides, ordem) VALUES (?,?,?,?,?)')
+        .bind(s.id, s.titulo, s.capa, JSON.stringify(s.slides), i + 1)));
+      break;
+    }
+    case 'ativo': await executar('UPDATE stories SET ativo = 1 - ativo WHERE id = ?', id); break;
+    case 'subir':
+    case 'descer': {
+      const lista = await todos<{ id: number }>('SELECT id FROM stories ORDER BY ordem, id');
+      const i = lista.findIndex((s) => s.id === id), j = f.get('acao') === 'subir' ? i - 1 : i + 1;
+      if (i >= 0 && j >= 0 && j < lista.length) [lista[i], lista[j]] = [lista[j], lista[i]];
+      const db = await banco();
+      await db.batch(lista.map((s, k) => db.prepare('UPDATE stories SET ordem = ? WHERE id = ?').bind(k + 1, s.id)));
+      break;
+    }
+    case 'excluir': await executar('DELETE FROM stories WHERE id = ?', id); break;
+  }
+  await limparCacheStories(Astro.url);
+  return Astro.redirect('/admin/stories/');
+}
+
+const stories = await todos<{ id: number; titulo: string; capa: string; slides: string; ativo: number }>('SELECT * FROM stories ORDER BY ordem, id');
+---
+<Admin titulo="Stories">
+  <a slot="acoes" href="/admin/stories/editar/" class="btn btn-primario"><Icone nome="mais" class="size-4" /> Novo story</a>
+  {stories.length ? (
+    <ul class="grid gap-3">
+      {stories.map((s, i) => (
+        <li class:list={['adm-card flex flex-wrap items-center gap-4 p-4 sm:p-4', !s.ativo && 'opacity-55']}>
+          <span class="size-14 shrink-0 rounded-full bg-cover bg-center ring-2 ring-laranja-500 ring-offset-2" style={s.capa ? (s.capa.startsWith('/') || s.capa.startsWith('http') ? `background-image:url(${s.capa})` : `background:${s.capa}`) : 'background:#fb8300'}></span>
+          <span class="min-w-0 flex-1"><b class="block">{s.titulo}</b><span class="text-xs text-tinta-suave">{JSON.parse(s.slides).length} telas · {s.ativo ? 'no ar' : 'desativado'}</span></span>
+          <form method="post" class="flex flex-wrap gap-1">
+            <input type="hidden" name="id" value={s.id} />
+            <button name="acao" value="subir" disabled={i === 0} class="btn btn-contorno adm-btn-p disabled:opacity-30" aria-label="Subir">↑</button>
+            <button name="acao" value="descer" disabled={i === stories.length - 1} class="btn btn-contorno adm-btn-p disabled:opacity-30" aria-label="Descer">↓</button>
+            <button name="acao" value="ativo" class="btn btn-contorno adm-btn-p">{s.ativo ? 'Desativar' : 'Ativar'}</button>
+            <a href={`/admin/stories/editar/?id=${s.id}`} class="btn btn-escuro adm-btn-p">Editar</a>
+            <button name="acao" value="excluir" class="btn btn-contorno adm-btn-p text-red-700" data-confirmar={`Excluir o story ${s.titulo}?`}>Excluir</button>
+          </form>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <div class="adm-vazio space-y-4">
+      <p>Nenhum story cadastrado. O site está mostrando os stories padrão.</p>
+      <form method="post"><button name="acao" value="importar" class="btn btn-primario">Importar os stories que estão no site</button></form>
+    </div>
+  )}
+  <p class="mt-6 text-xs text-tinta-suave">As mudanças aparecem no site em até 1 minuto. Se todos forem desativados, o site volta a mostrar os stories padrão.</p>
+</Admin>

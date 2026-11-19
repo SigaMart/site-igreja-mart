@@ -1,0 +1,115 @@
+---
+// Contatos da igreja: pessoas que recebem mensagens e lembretes pelo WhatsApp.
+// Etiquetas (ex.: jovens, louvor, visitantes) servem para escolher para quem enviar.
+export const prerender = false;
+import Admin from '../../layouts/Admin.astro';
+import Icone from '../../components/Icone.astro';
+import { banco, todos, um, executar, normalizarTelefone } from '../../lib/admin/db';
+import { listaEtiquetas, limparEtiquetas } from '../../lib/admin/contatos';
+
+type Contato = { id: number; nome: string; telefone: string; email: string; tags: string; observacao: string; aceita_whatsapp: number; origem: string };
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const t = (k: string) => String(f.get(k) ?? '').trim();
+  const acao = t('acao');
+  if (acao === 'salvar') {
+    const dados = [t('nome'), normalizarTelefone(t('telefone')), t('email'), limparEtiquetas(t('tags')), t('observacao'), f.get('aceita_whatsapp') ? 1 : 0];
+    if (Number(t('id'))) await executar('UPDATE contatos SET nome=?, telefone=?, email=?, tags=?, observacao=?, aceita_whatsapp=? WHERE id=?', ...dados, Number(t('id')));
+    else await executar('INSERT INTO contatos (nome, telefone, email, tags, observacao, aceita_whatsapp) VALUES (?,?,?,?,?,?)', ...dados);
+    return Astro.redirect('/admin/contatos/?ok=Contato+salvo.');
+  }
+  if (acao === 'excluir') {
+    await executar('DELETE FROM contatos WHERE id = ?', Number(t('id')));
+    return Astro.redirect('/admin/contatos/?ok=Contato+excluído.');
+  }
+  if (acao === 'importar') {
+    // Uma pessoa por linha: nome; telefone; etiquetas (separadas por vírgula)
+    const tagsExtra = limparEtiquetas(t('tags_import'));
+    const db = await banco();
+    const existentes = new Set((await todos<{ telefone: string }>('SELECT telefone FROM contatos')).map((c) => c.telefone));
+    const novos: D1PreparedStatement[] = [];
+    for (const linha of t('linhas').split(/\r?\n/)) {
+      const [nome, tel, tags] = linha.split(/[;\t]/).map((x) => x?.trim() ?? '');
+      const telefone = normalizarTelefone(tel ?? '');
+      if (!nome || telefone.length < 12 || existentes.has(telefone)) continue;
+      existentes.add(telefone);
+      novos.push(db.prepare("INSERT INTO contatos (nome, telefone, tags, origem) VALUES (?, ?, ?, 'importação')").bind(nome, telefone, limparEtiquetas([tags, tagsExtra].filter(Boolean).join(','))));
+    }
+    for (let i = 0; i < novos.length; i += 50) await db.batch(novos.slice(i, i + 50));
+    return Astro.redirect(`/admin/contatos/?ok=${novos.length}+contatos+importados.`);
+  }
+}
+
+const busca = Astro.url.searchParams.get('q')?.trim() ?? '';
+const etiqueta = Astro.url.searchParams.get('etiqueta') ?? '';
+const cond: string[] = [], params: unknown[] = [];
+if (busca) { cond.push('(nome LIKE ? OR telefone LIKE ? OR email LIKE ?)'); params.push(`%${busca}%`, `%${busca.replace(/\D/g, '') || busca}%`, `%${busca}%`); }
+if (etiqueta) { cond.push("(',' || tags || ',') LIKE ?"); params.push(`%,${etiqueta},%`); }
+const contatos = await todos<Contato>(`SELECT * FROM contatos ${cond.length ? 'WHERE ' + cond.join(' AND ') : ''} ORDER BY nome LIMIT 500`, ...params);
+const total = (await um<{ n: number }>('SELECT COUNT(*) n FROM contatos'))?.n ?? 0;
+const etiquetas = await listaEtiquetas();
+const editar = await um<Contato>('SELECT * FROM contatos WHERE id = ?', Number(Astro.url.searchParams.get('editar')) || 0);
+const fmtTel = (t: string) => t?.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') ?? '';
+---
+<Admin titulo={`Contatos (${total})`}>
+  <div class="grid gap-6 lg:grid-cols-[1fr_20rem]">
+    <section class="min-w-0">
+      <form class="mb-4 flex flex-wrap gap-2">
+        <input name="q" value={busca} placeholder="Buscar por nome, telefone ou e-mail" class="adm-campo mt-0 min-w-52 flex-1" />
+        <select name="etiqueta" class="adm-campo mt-0 w-auto">
+          <option value="">Todas as etiquetas</option>
+          {etiquetas.map((e) => <option value={e.nome} selected={etiqueta === e.nome}>{e.nome} ({e.n})</option>)}
+        </select>
+        <button class="btn btn-escuro"><Icone nome="busca" class="size-4" /> Buscar</button>
+      </form>
+      {contatos.length ? (
+        <div class="adm-card overflow-x-auto p-0 sm:p-0">
+          <table class="adm-tabela">
+            <thead><tr><th>Nome</th><th>WhatsApp</th><th>Etiquetas</th><th></th></tr></thead>
+            <tbody>
+              {contatos.map((c) => (
+                <tr>
+                  <td><b>{c.nome}</b>{c.email && <span class="block text-xs text-tinta-suave">{c.email}</span>}</td>
+                  <td class="whitespace-nowrap">{fmtTel(c.telefone)}{!c.aceita_whatsapp && <span class="adm-selo ml-1 bg-red-50 text-red-700">não enviar</span>}</td>
+                  <td>{c.tags.split(',').filter(Boolean).map((t) => <span class="adm-selo mr-1 mb-1 bg-laranja-50 text-laranja-800">{t}</span>)}</td>
+                  <td class="text-right whitespace-nowrap">
+                    <a href={`?editar=${c.id}`} class="btn btn-contorno adm-btn-p">Editar</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p class="adm-vazio">Nenhum contato encontrado.</p>}
+    </section>
+
+    <aside class="space-y-6">
+      <form method="post" class="adm-card space-y-3">
+        <input type="hidden" name="acao" value="salvar" /><input type="hidden" name="id" value={editar?.id ?? ''} />
+        <h2 class="font-extrabold">{editar ? 'Editar contato' : 'Novo contato'}</h2>
+        <label class="adm-rotulo">Nome<input name="nome" required class="adm-campo" value={editar?.nome} /></label>
+        <label class="adm-rotulo">WhatsApp (com DDD)<input name="telefone" class="adm-campo" value={editar ? fmtTel(editar.telefone) : ''} placeholder="(11) 98765-4321" /></label>
+        <label class="adm-rotulo">E-mail<input name="email" type="email" class="adm-campo" value={editar?.email} /></label>
+        <label class="adm-rotulo">Etiquetas<input name="tags" class="adm-campo" value={editar?.tags.replaceAll(',', ', ')} list="lista-etiquetas" placeholder="jovens, louvor" />
+          <span class="adm-dica">Separe por vírgula.</span></label>
+        <label class="adm-rotulo">Observação<textarea name="observacao" rows="2" class="adm-campo">{editar?.observacao}</textarea></label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="aceita_whatsapp" checked={editar ? !!editar.aceita_whatsapp : true} class="size-4 accent-laranja-500" /> Aceita receber mensagens</label>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-escuro">Salvar</button>
+          {editar && <a href="/admin/contatos/" class="btn btn-contorno">Cancelar</a>}
+          {editar && <button name="acao" value="excluir" class="btn btn-contorno text-red-700" data-confirmar="Excluir este contato?">Excluir</button>}
+        </div>
+      </form>
+      <form method="post" class="adm-card space-y-3">
+        <input type="hidden" name="acao" value="importar" />
+        <h2 class="font-extrabold">Importar vários</h2>
+        <label class="adm-rotulo">Uma pessoa por linha<textarea name="linhas" rows="5" class="adm-campo font-mono text-xs" placeholder="Maria Silva; 11987654321; jovens&#10;João Souza; 11912345678"></textarea>
+          <span class="adm-dica">Nome; telefone; etiquetas. Dá para colar direto de uma planilha. Telefones repetidos são ignorados.</span></label>
+        <label class="adm-rotulo">Etiqueta para todos<input name="tags_import" class="adm-campo" list="lista-etiquetas" /></label>
+        <button class="btn btn-escuro">Importar</button>
+      </form>
+    </aside>
+  </div>
+  <datalist id="lista-etiquetas">{etiquetas.map((e) => <option value={e.nome} />)}</datalist>
+</Admin>

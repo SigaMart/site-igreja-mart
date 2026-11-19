@@ -1,0 +1,50 @@
+---
+// Lista de devocionais ou textos do blog (arquivos no GitHub).
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import Icone from '../../../components/Icone.astro';
+import { TIPOS } from '../../../lib/admin/conteudo';
+import { listar } from '../../../lib/admin/github';
+import { lerAsset } from '../../../lib/admin/midia';
+
+const tipo = TIPOS[Astro.params.tipo!];
+if (!tipo) return new Response('Não encontrado', { status: 404 });
+
+let arquivos: { name: string }[] = [], erro = '';
+try { arquivos = await listar(tipo.pasta); } catch (e) { erro = e instanceof Error ? e.message : String(e); }
+
+// Títulos e datas do último build do site
+type Item = { id: string; titulo: string; data: string; rascunho: boolean };
+let publicados: Item[] = [];
+try {
+  publicados = (await lerAsset<Record<string, Item[]>>(Astro.url, '/dados/conteudo.json'))[Astro.params.tipo!] ?? [];
+} catch { /* sem dados do build */ }
+const porId = new Map(publicados.map((p) => [p.id, p]));
+const itens = (arquivos.length ? arquivos.filter((a) => a.name.endsWith('.md')).map((a) => a.name.replace(/\.md$/, '')) : publicados.map((p) => p.id))
+  .map((id) => ({ id, ...porId.get(id) }))
+  .sort((a, b) => (b.data ?? '9999').localeCompare(a.data ?? '9999'));
+---
+<Admin titulo={tipo.nome}>
+  <a slot="acoes" href={`/admin/${Astro.params.tipo}/editar/`} class="btn btn-primario"><Icone nome="mais" class="size-4" /> Novo {tipo.singular}</a>
+  {erro && <p class="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{erro}</p>}
+  {itens.length ? (
+    <div class="adm-card overflow-x-auto p-0 sm:p-0">
+      <table class="adm-tabela">
+        <thead><tr><th>Título</th><th>Data</th><th></th></tr></thead>
+        <tbody>
+          {itens.map((i) => (
+            <tr>
+              <td><b>{i.titulo ?? i.id}</b>{i.rascunho && <span class="adm-selo ml-2 bg-tinta/5 text-tinta-suave">rascunho</span>}{!i.titulo && <span class="adm-selo ml-2 bg-blue-50 text-blue-700">publicando…</span>}</td>
+              <td class="whitespace-nowrap">{i.data?.split('-').reverse().join('/')}</td>
+              <td class="text-right whitespace-nowrap">
+                {i.titulo && !i.rascunho && <a href={`${tipo.url}${i.id}/`} target="_blank" class="btn btn-contorno adm-btn-p">Ver</a>}
+                <a href={`/admin/${Astro.params.tipo}/editar/?id=${i.id}`} class="btn btn-escuro adm-btn-p">Editar</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : <p class="adm-vazio">Nada por aqui ainda.</p>}
+  <p class="mt-6 text-xs text-tinta-suave">Ao salvar, o site é atualizado em cerca de 2 minutos.</p>
+</Admin>

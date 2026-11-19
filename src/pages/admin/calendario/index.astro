@@ -1,0 +1,118 @@
+---
+// Calendário de conteúdo: vários calendários (WhatsApp, Instagram, Dia a Dia…) numa visão de mês.
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import Icone from '../../../components/Icone.astro';
+import { todos, executar, utcParaBr, brParaUtc } from '../../../lib/admin/db';
+
+type Cal = { id: number; nome: string; cor: string };
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const t = (k: string) => String(f.get(k) ?? '').trim();
+  if (t('acao') === 'calendario' && t('nome')) {
+    if (Number(t('id'))) await executar('UPDATE calendarios SET nome = ?, cor = ? WHERE id = ?', t('nome'), t('cor') || '#f97316', Number(t('id')));
+    else await executar('INSERT INTO calendarios (nome, cor, ordem) VALUES (?, ?, 99)', t('nome'), t('cor') || '#f97316');
+  }
+  if (t('acao') === 'excluir-calendario') {
+    await executar('DELETE FROM eventos WHERE calendario_id = ?', Number(t('id')));
+    await executar('DELETE FROM calendarios WHERE id = ?', Number(t('id')));
+  }
+  return Astro.redirect(`/admin/calendario/${Astro.url.search}`);
+}
+
+const calendarios = await todos<Cal>('SELECT * FROM calendarios ORDER BY ordem, nome');
+const hojeBr = utcParaBr(new Date().toISOString()).slice(0, 10);
+const mesParam = /^\d{4}-\d{2}$/.test(Astro.url.searchParams.get('mes') ?? '') ? Astro.url.searchParams.get('mes')! : hojeBr.slice(0, 7);
+const [ano, mes] = mesParam.split('-').map(Number);
+const ocultos = new Set((Astro.url.searchParams.get('ocultar') ?? '').split(',').filter(Boolean).map(Number));
+
+// Grade do mês (semanas de domingo a sábado)
+const primeiro = new Date(Date.UTC(ano, mes - 1, 1));
+const inicioGrade = new Date(primeiro.getTime() - primeiro.getUTCDay() * 86400_000);
+const dias = Array.from({ length: 42 }, (_, i) => new Date(inicioGrade.getTime() + i * 86400_000).toISOString().slice(0, 10));
+const ultimaSemana = dias.findLastIndex((d) => d.slice(0, 7) === mesParam);
+const grade = dias.slice(0, Math.ceil((ultimaSemana + 1) / 7) * 7);
+
+const eventos = await todos<{ id: number; titulo: string; inicio: string; status: string; calendario_id: number; lembretes: number }>(
+  'SELECT e.*, (SELECT COUNT(*) FROM envios v WHERE v.evento_id = e.id) lembretes FROM eventos e WHERE inicio >= ? AND inicio < ? ORDER BY inicio',
+  brParaUtc(`${grade[0]}T00:00`), brParaUtc(`${grade.at(-1)}T23:59`));
+const porDia = new Map<string, typeof eventos>();
+for (const e of eventos) {
+  if (ocultos.has(e.calendario_id)) continue;
+  const d = utcParaBr(e.inicio).slice(0, 10);
+  porDia.set(d, [...(porDia.get(d) ?? []), e]);
+}
+const cor = new Map(calendarios.map((c) => [c.id, c.cor]));
+const nomeMes = primeiro.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const mover = (n: number) => new Date(Date.UTC(ano, mes - 1 + n, 1)).toISOString().slice(0, 7);
+const qs = (extra: Record<string, string>) => '?' + new URLSearchParams({ mes: mesParam, ...(ocultos.size ? { ocultar: [...ocultos].join(',') } : {}), ...extra });
+const alternar = (id: number) => { const s = new Set(ocultos); if (s.has(id)) s.delete(id); else s.add(id); return [...s].join(','); };
+---
+<Admin titulo="Calendário">
+  <a slot="acoes" href="/admin/calendario/evento/" class="btn btn-primario"><Icone nome="mais" class="size-4" /> Novo item</a>
+  <div class="grid gap-6 xl:grid-cols-[1fr_16rem]">
+    <section class="adm-card min-w-0 p-3 sm:p-4">
+      <div class="mb-3 flex items-center gap-2">
+        <a href={qs({ mes: mover(-1) })} class="btn btn-contorno adm-btn-p" aria-label="Mês anterior"><Icone nome="setaEsq" class="size-4" /></a>
+        <a href={qs({ mes: mover(1) })} class="btn btn-contorno adm-btn-p" aria-label="Próximo mês"><Icone nome="seta" class="size-4" /></a>
+        <h2 class="ml-2 text-lg font-extrabold capitalize">{nomeMes}</h2>
+        <a href={qs({ mes: hojeBr.slice(0, 7) })} class="btn btn-contorno adm-btn-p ml-auto">Hoje</a>
+      </div>
+      <div class="overflow-x-auto">
+        <div class="min-w-[42rem]">
+          <div class="grid grid-cols-7 text-center text-[0.7rem] font-bold tracking-wide text-tinta-suave uppercase">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => <div class="py-1.5">{d}</div>)}
+          </div>
+          <div class="grid grid-cols-7 overflow-hidden rounded-xl border-r border-b border-tinta/8">
+            {grade.map((d) => (
+              <div class:list={['relative min-h-28 border-t border-l border-tinta/8 p-1 text-xs', d.slice(0, 7) !== mesParam && 'bg-creme/70 text-tinta-suave/60']}>
+                <a href={`/admin/calendario/evento/?dia=${d}`} class:list={['inline-flex size-6 items-center justify-center rounded-full font-bold hover:bg-laranja-100', d === hojeBr && 'bg-laranja-500 text-tinta']} title="Novo item neste dia">{Number(d.slice(8))}</a>
+                <div class="mt-0.5 space-y-0.5">
+                  {(porDia.get(d) ?? []).map((e) => (
+                    <a href={`/admin/calendario/evento/?id=${e.id}`} class:list={['block truncate rounded-md px-1.5 py-0.5 font-semibold text-white', e.status === 'publicado' && 'opacity-60']} style={`background:${cor.get(e.calendario_id) ?? '#888'}`} title={e.titulo}>
+                      {e.status === 'publicado' && '✓ '}{utcParaBr(e.inicio).slice(11)} {e.titulo}{e.lembretes > 0 && ' 🔔'}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="space-y-4">
+      <section class="adm-card">
+        <h2 class="font-extrabold">Calendários</h2>
+        <ul class="mt-3 space-y-1.5 text-sm">
+          {calendarios.map((c) => (
+            <li class="flex items-center gap-2">
+              <a href={qs({ ocultar: alternar(c.id) })} class:list={['flex flex-1 items-center gap-2 font-semibold', ocultos.has(c.id) && 'opacity-40']} title="Mostrar ou ocultar">
+                <span class="size-3 rounded" style={`background:${c.cor}`}></span>{c.nome}
+              </a>
+              <details class="relative">
+                <summary class="cursor-pointer list-none p-1 text-tinta-suave"><Icone nome="lapis" class="size-3.5" /></summary>
+                <form method="post" class="absolute right-0 z-10 mt-1 w-56 space-y-2 rounded-xl bg-white p-3 shadow-xl ring-1 ring-tinta/10">
+                  <input type="hidden" name="id" value={c.id} />
+                  <input name="nome" value={c.nome} class="adm-campo mt-0" />
+                  <input name="cor" type="color" value={c.cor} class="h-8 w-full" />
+                  <div class="flex gap-1">
+                    <button name="acao" value="calendario" class="btn btn-escuro adm-btn-p">Salvar</button>
+                    <button name="acao" value="excluir-calendario" class="btn btn-contorno adm-btn-p text-red-700" data-confirmar={`Excluir ${c.nome} e todos os itens dele?`}>Excluir</button>
+                  </div>
+                </form>
+              </details>
+            </li>
+          ))}
+        </ul>
+        <form method="post" class="mt-4 flex gap-2 border-t border-tinta/8 pt-4">
+          <input type="hidden" name="acao" value="calendario" />
+          <input name="nome" placeholder="Novo calendário" required class="adm-campo mt-0 min-w-0 flex-1" />
+          <input name="cor" type="color" value="#7c3aed" class="h-10 w-10 shrink-0 rounded-lg" aria-label="Cor" />
+          <button class="btn btn-escuro adm-btn-p shrink-0" aria-label="Adicionar"><Icone nome="mais" class="size-4" /></button>
+        </form>
+      </section>
+      <p class="text-xs text-tinta-suave">Clique no número do dia para criar um item nele. 🔔 = tem lembrete por WhatsApp. ✓ = publicado.</p>
+    </aside>
+  </div>
+</Admin>

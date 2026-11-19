@@ -25,3 +25,6 @@ pnpm-debug.log*
 
 # Cloudflare
 .wrangler/
+
+# Segredos locais do Worker
+.dev.vars

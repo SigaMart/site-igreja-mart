@@ -1,11 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // Site estático: a Cloudflare serve a pasta dist gerada pelo "npm run build".
+  // Site público estático + painel /admin e API /api no Worker (ver src/worker.ts).
+  // Banco (DB), mídias (MIDIA) e sessões (SESSION) são criados sozinhos no primeiro deploy.
   "name": "igreja-mart",
+  "main": "./src/worker.ts",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "404-page",
     "html_handling": "force-trailing-slash"
-  }
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "igreja-mart" }],
+  "kv_namespaces": [{ "binding": "MIDIA" }, { "binding": "SESSION" }],
+  // Agendador: a cada minuto envia as mensagens programadas no WhatsApp.
+  "triggers": { "crons": ["* * * * *"] }
 }

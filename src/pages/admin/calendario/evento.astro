@@ -1,0 +1,119 @@
+---
+// Item do calendário (post, evento, tarefa) e seus lembretes por WhatsApp.
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import Compositor from '../../../components/admin/Compositor.astro';
+import { todos, um, executar, brParaUtc, utcParaBr, fmtDataHora } from '../../../lib/admin/db';
+import { criarEnvio, STATUS_ENVIO } from '../../../lib/admin/envios';
+import { apagarMidia } from '../../../lib/admin/midia';
+
+type Evento = { id: number; calendario_id: number; titulo: string; descricao: string; inicio: string; fim: string | null; status: string };
+const STATUS = { planejado: 'Planejado', pronto: 'Pronto', publicado: 'Publicado / feito' } as const;
+
+let id = Number(Astro.url.searchParams.get('id')) || 0;
+let erro = '';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const t = (k: string) => String(f.get(k) ?? '').trim();
+  try {
+    switch (t('acao')) {
+      case 'salvar': {
+        if (!t('titulo') || !t('inicio')) throw new Error('Preencha o título e a data.');
+        const dados = [Number(t('calendario_id')), t('titulo'), t('descricao'), brParaUtc(t('inicio')), t('fim') ? brParaUtc(t('fim')) : null, t('status') || 'planejado'];
+        if (id) await executar('UPDATE eventos SET calendario_id=?, titulo=?, descricao=?, inicio=?, fim=?, status=? WHERE id=?', ...dados, id);
+        else id = Number((await executar('INSERT INTO eventos (calendario_id, titulo, descricao, inicio, fim, status) VALUES (?,?,?,?,?,?)', ...dados)).meta.last_row_id);
+        return Astro.redirect(`/admin/calendario/evento/?id=${id}&ok=Salvo.`);
+      }
+      case 'excluir': {
+        const ev = await um<Evento>('SELECT * FROM eventos WHERE id = ?', id);
+        await executar("UPDATE envios SET status = 'cancelado' WHERE evento_id = ? AND status = 'agendado'", id);
+        await executar('DELETE FROM eventos WHERE id = ?', id);
+        return Astro.redirect(`/admin/calendario/?mes=${ev ? utcParaBr(ev.inicio).slice(0, 7) : ''}`);
+      }
+      case 'lembrete': {
+        const r = await criarEnvio(f, id);
+        return Astro.redirect(`/admin/calendario/evento/?id=${id}&ok=${encodeURIComponent(`Lembrete para ${r.total} destino(s) agendado para ${fmtDataHora(r.quando)}.`)}`);
+      }
+      case 'cancelar-lembrete':
+        await executar("UPDATE envios SET status = 'cancelado' WHERE id = ? AND evento_id = ?", Number(t('envio')), id);
+        return Astro.redirect(`/admin/calendario/evento/?id=${id}`);
+      case 'excluir-lembrete': {
+        const e = await um<{ midia_chave: string | null }>('SELECT midia_chave FROM envios WHERE id = ? AND evento_id = ?', Number(t('envio')), id);
+        await apagarMidia(e?.midia_chave);
+        await executar('DELETE FROM envio_destinos WHERE envio_id = ?', Number(t('envio')));
+        await executar('DELETE FROM envios WHERE id = ? AND evento_id = ?', Number(t('envio')), id);
+        return Astro.redirect(`/admin/calendario/evento/?id=${id}`);
+      }
+    }
+  } catch (e) {
+    erro = e instanceof Error ? e.message : String(e);
+  }
+}
+
+const calendarios = await todos<{ id: number; nome: string; cor: string }>('SELECT * FROM calendarios ORDER BY ordem, nome');
+const ev = id ? await um<Evento>('SELECT * FROM eventos WHERE id = ?', id) : null;
+const dia = Astro.url.searchParams.get('dia');
+const inicio = ev ? utcParaBr(ev.inicio) : `${dia ?? utcParaBr(new Date().toISOString()).slice(0, 10)}T19:00`;
+const lembretes = ev ? await todos<{ id: number; titulo: string; status: string; agendado_para: string; total: number; enviados: number; erros: number }>(
+  'SELECT * FROM envios WHERE evento_id = ? ORDER BY agendado_para', ev.id) : [];
+
+// Sugestão de lembrete: 1 dia antes, com o título e a data
+const dataBonita = ev ? new Date(ev.inicio).toLocaleString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
+const sugestao = ev ? `Olá, {nome}! 👋\n\n*${ev.titulo}*\n📅 ${dataBonita}\n${ev.descricao ? `\n${ev.descricao}\n` : ''}\nPodemos contar com você? Responda *SIM* para confirmar. 🙏` : '';
+const umDiaAntes = ev ? utcParaBr(new Date(new Date(ev.inicio).getTime() - 86400_000).toISOString()) : '';
+---
+<Admin titulo={ev ? ev.titulo : 'Novo item'}>
+  <a slot="acoes" href={`/admin/calendario/?mes=${inicio.slice(0, 7)}`} class="btn btn-contorno">Voltar ao calendário</a>
+  {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
+
+  <form method="post" class="adm-card grid gap-4 sm:grid-cols-2">
+    <input type="hidden" name="acao" value="salvar" />
+    <label class="adm-rotulo">Calendário
+      <select name="calendario_id" class="adm-campo">{calendarios.map((c) => <option value={c.id} selected={ev?.calendario_id === c.id}>{c.nome}</option>)}</select>
+    </label>
+    <label class="adm-rotulo">Situação
+      <select name="status" class="adm-campo">{Object.entries(STATUS).map(([k, r]) => <option value={k} selected={ev?.status === k}>{r}</option>)}</select>
+    </label>
+    <label class="adm-rotulo sm:col-span-2">Título<input name="titulo" required class="adm-campo" value={ev?.titulo} placeholder="Ex.: Post do culto de domingo" /></label>
+    <label class="adm-rotulo">Início<input name="inicio" type="datetime-local" required class="adm-campo" value={inicio} /></label>
+    <label class="adm-rotulo">Fim (opcional)<input name="fim" type="datetime-local" class="adm-campo" value={ev?.fim ? utcParaBr(ev.fim) : ''} /></label>
+    <label class="adm-rotulo sm:col-span-2">Descrição / roteiro<textarea name="descricao" rows="5" class="adm-campo" placeholder="Texto do post, ideias, quem é responsável…">{ev?.descricao}</textarea></label>
+    <div class="flex flex-wrap gap-2 sm:col-span-2">
+      <button class="btn btn-escuro">Salvar</button>
+      {ev && <button name="acao" value="excluir" class="btn btn-contorno text-red-700" data-confirmar="Excluir este item? Lembretes ainda não enviados serão cancelados.">Excluir</button>}
+    </div>
+  </form>
+
+  {ev && (
+    <section class="mt-8">
+      <h2 class="text-lg font-extrabold">Lembretes por WhatsApp</h2>
+      <p class="mt-1 text-sm text-tinta-suave">Avise as pessoas escolhidas sobre este item, por exemplo para confirmar presença.</p>
+      {lembretes.length > 0 && (
+        <ul class="mt-4 space-y-2">
+          {lembretes.map((l) => (
+            <li class="adm-card flex flex-wrap items-center gap-3 p-4 sm:p-4">
+              <span class={`adm-selo ${STATUS_ENVIO[l.status]?.[1]}`}>{STATUS_ENVIO[l.status]?.[0]}</span>
+              <span class="flex-1 text-sm"><b>{fmtDataHora(l.agendado_para)}</b> · {l.enviados}/{l.total} enviados{l.erros > 0 && `, ${l.erros} erro(s)`}</span>
+              <form method="post" class="flex gap-1">
+                <input type="hidden" name="envio" value={l.id} />
+                <a href={`/admin/whatsapp/?ver=${l.id}#detalhe`} class="btn btn-contorno adm-btn-p">Detalhes</a>
+                {l.status === 'agendado' && <button name="acao" value="cancelar-lembrete" class="btn btn-contorno adm-btn-p">Cancelar</button>}
+                {l.status !== 'enviando' && <button name="acao" value="excluir-lembrete" class="btn btn-contorno adm-btn-p text-red-700" data-confirmar="Excluir este lembrete?">Excluir</button>}
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+      <details class="adm-card mt-4" open={!lembretes.length}>
+        <summary class="cursor-pointer font-extrabold">+ Novo lembrete</summary>
+        <form method="post" enctype="multipart/form-data" class="mt-5">
+          <input type="hidden" name="acao" value="lembrete" />
+          <input type="hidden" name="titulo" value={`Lembrete: ${ev.titulo}`} />
+          <Compositor corpo={sugestao} quando={umDiaAntes} mostrarTitulo={false} />
+          <button class="btn btn-primario mt-5">Agendar lembrete</button>
+        </form>
+      </details>
+    </section>
+  )}
+</Admin>

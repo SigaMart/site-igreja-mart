@@ -1,0 +1,75 @@
+---
+// Entrar no painel. No primeiro acesso (sem usuários), cria o administrador com o código ADMIN_CODIGO
+// (segredo configurado na Cloudflare).
+export const prerender = false;
+import '../../styles/global.css';
+import '../../styles/admin.css';
+import { env } from 'cloudflare:workers';
+import { um, executar } from '../../lib/admin/db';
+import { gerarHash, conferirSenha } from '../../lib/admin/auth';
+
+if (Astro.url.searchParams.has('sair')) {
+  Astro.session?.destroy();
+  return Astro.redirect('/admin/entrar/');
+}
+
+const temUsuario = !!(await um('SELECT id FROM usuarios LIMIT 1'));
+const volta = Astro.url.searchParams.get('volta');
+const destino = volta?.startsWith('/admin') ? volta : '/admin/';
+let erro = '';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const email = String(f.get('email') || '').trim().toLowerCase();
+  const senha = String(f.get('senha') || '');
+  if (!temUsuario) {
+    const codigo = String(f.get('codigo') || '');
+    const nome = String(f.get('nome') || '').trim();
+    const esperado = (env as unknown as { ADMIN_CODIGO?: string }).ADMIN_CODIGO;
+    if (!esperado) erro = 'Configure o segredo ADMIN_CODIGO na Cloudflare antes do primeiro acesso.';
+    else if (codigo !== esperado) erro = 'Código de primeiro acesso incorreto.';
+    else if (!nome || !email || senha.length < 8) erro = 'Preencha nome, e-mail e uma senha com pelo menos 8 caracteres.';
+    else {
+      const r = await executar('INSERT INTO usuarios (nome, email, senha) VALUES (?, ?, ?)', nome, email, await gerarHash(senha));
+      Astro.session?.set('usuario', { id: Number(r.meta.last_row_id), nome, email });
+      return Astro.redirect('/admin/');
+    }
+  } else {
+    const u = await um<{ id: number; nome: string; email: string; senha: string }>('SELECT * FROM usuarios WHERE email = ?', email);
+    if (u && (await conferirSenha(senha, u.senha))) {
+      Astro.session?.regenerate();
+      Astro.session?.set('usuario', { id: u.id, nome: u.nome, email: u.email });
+      return Astro.redirect(destino);
+    }
+    erro = 'E-mail ou senha incorretos.';
+  }
+}
+---
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Entrar · Painel MART</title>
+    <link rel="icon" href="/favicon-32.png" />
+  </head>
+  <body class="flex min-h-screen items-center justify-center bg-creme p-4 font-sans text-tinta antialiased">
+    <form method="post" class="adm-card w-full max-w-sm space-y-4">
+      <div>
+        <h1 class="text-xl font-extrabold">{temUsuario ? 'Painel da Igreja MART' : 'Primeiro acesso'}</h1>
+        <p class="mt-1 text-sm text-tinta-suave">{temUsuario ? 'Entre com seu e-mail e senha.' : 'Crie o usuário administrador do painel.'}</p>
+      </div>
+      {erro && <p class="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-800">{erro}</p>}
+      {!temUsuario && (
+        <>
+          <label class="adm-rotulo">Código de primeiro acesso<input name="codigo" required class="adm-campo" autocomplete="off" /></label>
+          <label class="adm-rotulo">Seu nome<input name="nome" required class="adm-campo" /></label>
+        </>
+      )}
+      <label class="adm-rotulo">E-mail<input name="email" type="email" required class="adm-campo" autocomplete="username" /></label>
+      <label class="adm-rotulo">Senha<input name="senha" type="password" required minlength="8" class="adm-campo" autocomplete={temUsuario ? 'current-password' : 'new-password'} /></label>
+      <button class="btn btn-primario w-full">{temUsuario ? 'Entrar' : 'Criar e entrar'}</button>
+    </form>
+  </body>
+</html>

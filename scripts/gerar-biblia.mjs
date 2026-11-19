@@ -47,10 +47,9 @@ for (const linha of linhas) {
 for (const l of livros) l.capitulos = l.capitulos.map((c) => c.map((v) => v ?? ''));
 
 mkdirSync(new URL('../src/data/', import.meta.url), { recursive: true });
-mkdirSync(new URL('../public/dados/', import.meta.url), { recursive: true });
 const json = JSON.stringify(livros);
 writeFileSync(new URL('../src/data/biblia.json', import.meta.url), json);
-writeFileSync(new URL('../public/dados/biblia.json', import.meta.url), json);
+// (o /dados/biblia.json do site é gerado no build, já com as correções: src/pages/dados/biblia.json.ts)
 // Índice leve (sem texto) para uso no navegador
 const indice = livros.map(({ slug, nome, abrev, testamento, capitulos }) => ({
   slug, nome, abrev, testamento, caps: capitulos.length,

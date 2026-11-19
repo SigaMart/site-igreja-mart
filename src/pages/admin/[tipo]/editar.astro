@@ -1,0 +1,135 @@
+---
+// Editor de devocional ou texto do blog. Salva o Markdown no GitHub (e a imagem do blog, se enviada).
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import { TIPOS } from '../../../lib/admin/conteudo';
+import { ler, gravar, apagar, lerMarkdown, montarMarkdown, slugificar } from '../../../lib/admin/github';
+import { utcParaBr } from '../../../lib/admin/db';
+import { lerAsset } from '../../../lib/admin/midia';
+
+const chaveTipo = Astro.params.tipo!;
+const tipo = TIPOS[chaveTipo];
+if (!tipo) return new Response('Não encontrado', { status: 404 });
+
+const id = Astro.url.searchParams.get('id') ?? '';
+let erro = '';
+let dados: Record<string, string> = { data: utcParaBr(new Date().toISOString()).slice(0, 10) };
+let corpo = '';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const t = (k: string) => String(f.get(k) ?? '').trim();
+  try {
+    if (t('acao') === 'excluir') {
+      await apagar(`${tipo.pasta}/${id}.md`, `Painel: remove ${tipo.singular} ${id}`);
+      return Astro.redirect(`/admin/${chaveTipo}/?ok=${encodeURIComponent('Excluído. O site atualiza em cerca de 2 minutos.')}`);
+    }
+    for (const c of tipo.campos) dados[c.k] = c.tipo === 'check' ? (f.get(c.k) ? 'true' : '') : t(c.k);
+    corpo = String(f.get('corpo') ?? '');
+    const slug = id || slugificar(t('slug') || t('titulo'));
+    if (!slug) throw new Error('Preencha o título.');
+
+    // Imagem nova (blog): vai para src/assets/fotos/blog/
+    const arq = f.get('imagem_arquivo');
+    if (arq instanceof File && arq.size) {
+      if (arq.size > 8 * 1024 * 1024) throw new Error('A imagem passa de 8 MB.');
+      const ext = (arq.name.split('.').pop() ?? 'jpg').toLowerCase().replace('jpeg', 'jpg');
+      if (!['jpg', 'png', 'webp'].includes(ext)) throw new Error('Use uma imagem JPG, PNG ou WebP.');
+      const caminho = `src/assets/fotos/blog/${slug}.${ext}`;
+      await gravar(caminho, new Uint8Array(await arq.arrayBuffer()), `Painel: imagem do ${tipo.singular} ${slug}`);
+      dados.imagem = `../../assets/fotos/blog/${slug}.${ext}`;
+    }
+
+    const faltando = tipo.campos.filter((c) => c.obrigatorio && !dados[c.k]).map((c) => c.rotulo);
+    if (faltando.length) throw new Error(`Preencha: ${faltando.join(', ')}.`);
+    if (!corpo.trim()) throw new Error('Escreva o texto.');
+
+    const md = montarMarkdown(Object.fromEntries(tipo.campos.map((c) => [c.k, c.tipo === 'check' ? (dados[c.k] ? true : undefined) : dados[c.k]])), corpo);
+    await gravar(`${tipo.pasta}/${slug}.md`, md, `Painel: ${id ? 'atualiza' : 'novo'} ${tipo.singular} ${slug}`);
+    return Astro.redirect(`/admin/${chaveTipo}/editar/?id=${slug}&ok=${encodeURIComponent('Salvo! O site atualiza em cerca de 2 minutos.')}`);
+  } catch (e) {
+    erro = e instanceof Error ? e.message : String(e);
+  }
+} else if (id) {
+  try {
+    const arq = await ler(`${tipo.pasta}/${id}.md`);
+    if (!arq) erro = 'Arquivo não encontrado no GitHub.';
+    else ({ dados, corpo } = lerMarkdown(arq.texto));
+  } catch (e) {
+    erro = e instanceof Error ? e.message : String(e);
+  }
+}
+
+// Fotos já existentes no site, para escolher como capa
+let fotos: { nome: string; mini: string }[] = [];
+if (tipo.campos.some((c) => c.tipo === 'imagem')) {
+  try { fotos = await lerAsset(Astro.url, '/dados/fotos.json'); } catch { /* ok */ }
+}
+const imagemAtual = dados.imagem?.replace('../../assets/fotos/', '') ?? '';
+---
+<Admin titulo={id ? `Editar ${tipo.singular}` : `Novo ${tipo.singular}`}>
+  <div slot="acoes" class="flex gap-2">
+    {id && <a href={`${tipo.url}${id}/`} target="_blank" class="btn btn-contorno">Ver no site</a>}
+    <a href={`/admin/${chaveTipo}/`} class="btn btn-contorno">Voltar</a>
+  </div>
+  {erro && <p class="mb-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{erro}</p>}
+  <form method="post" enctype="multipart/form-data" class="grid gap-6 lg:grid-cols-[1fr_22rem]">
+    <div class="adm-card space-y-4">
+      <div>
+        <div class="flex items-end justify-between gap-2">
+          <span class="adm-rotulo">Texto</span>
+          <span class="flex flex-wrap gap-1" data-barra>
+            <button type="button" data-ins="**|**" class="btn btn-contorno adm-btn-p font-extrabold">B</button>
+            <button type="button" data-ins="*|*" class="btn btn-contorno adm-btn-p italic">I</button>
+            <button type="button" data-ins={'\n## |\n'} class="btn btn-contorno adm-btn-p">Subtítulo</button>
+            <button type="button" data-ins={'\n- |'} class="btn btn-contorno adm-btn-p">Lista</button>
+            <button type="button" data-ins={'\n> |'} class="btn btn-contorno adm-btn-p">Citação</button>
+            <button type="button" data-ins="[|](https://)" class="btn btn-contorno adm-btn-p">Link</button>
+          </span>
+        </div>
+        <textarea name="corpo" rows="24" class="adm-campo font-mono text-[0.85rem] leading-relaxed" data-corpo>{corpo}</textarea>
+        <span class="adm-dica">**negrito**, *itálico*, ## subtítulo, - lista, &gt; citação. Deixe uma linha em branco entre parágrafos.</span>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="adm-card space-y-4">
+        {!id && <label class="adm-rotulo">Endereço da página<input name="slug" class="adm-campo" placeholder="gerado a partir do título" /><span class="adm-dica">{tipo.url}<b>endereco</b>/</span></label>}
+        {tipo.campos.map((c) =>
+          c.tipo === 'check' ? (
+            <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name={c.k} checked={dados[c.k] === 'true'} class="size-4 accent-laranja-500" /> {c.rotulo}</label>
+          ) : c.tipo === 'imagem' ? (
+            <div>
+              <span class="adm-rotulo">{c.rotulo}</span>
+              <select name={c.k} class="adm-campo">
+                <option value="">Escolha uma foto do site…</option>
+                {imagemAtual && !fotos.some((f) => f.nome === imagemAtual) && <option value={dados.imagem} selected>{imagemAtual}</option>}
+                {fotos.map((f) => <option value={`../../assets/fotos/${f.nome}`} selected={f.nome === imagemAtual}>{f.nome}</option>)}
+              </select>
+              <label class="adm-dica mt-2 block">ou envie uma nova (JPG, PNG ou WebP):<input type="file" name="imagem_arquivo" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full text-xs" /></label>
+            </div>
+          ) : (
+            <label class="adm-rotulo">{c.rotulo}
+              {c.tipo === 'area' ? <textarea name={c.k} rows="3" class="adm-campo">{dados[c.k]}</textarea>
+                : <input name={c.k} type={c.tipo === 'data' ? 'date' : 'text'} value={dados[c.k]} class="adm-campo" />}
+              {c.dica && <span class="adm-dica">{c.dica}</span>}
+            </label>
+          ),
+        )}
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button class="btn btn-primario">Salvar e publicar</button>
+        {id && <button name="acao" value="excluir" class="btn btn-contorno text-red-700" data-confirmar="Excluir este conteúdo do site?">Excluir</button>}
+      </div>
+    </div>
+  </form>
+</Admin>
+
+<script>
+  const corpo = document.querySelector<HTMLTextAreaElement>('[data-corpo]')!;
+  document.querySelectorAll<HTMLButtonElement>('[data-ins]').forEach((b) => b.addEventListener('click', () => {
+    const [antes, depois] = b.dataset.ins!.split('|');
+    const { selectionStart: a, selectionEnd: z, value: v } = corpo;
+    corpo.setRangeText(antes + v.slice(a, z) + depois, a, z, 'end');
+    corpo.focus();
+  }));
+</script>

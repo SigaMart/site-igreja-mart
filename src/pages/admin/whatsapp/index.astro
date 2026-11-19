@@ -1,0 +1,82 @@
+---
+// Envios de WhatsApp: agendados, em andamento e concluídos.
+export const prerender = false;
+import Admin from '../../../layouts/Admin.astro';
+import Icone from '../../../components/Icone.astro';
+import { todos, um, executar, fmtDataHora } from '../../../lib/admin/db';
+import { apagarMidia } from '../../../lib/admin/midia';
+import { STATUS_ENVIO } from '../../../lib/admin/envios';
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const id = Number(f.get('id'));
+  const acao = f.get('acao');
+  if (acao === 'cancelar') await executar("UPDATE envios SET status = 'cancelado' WHERE id = ? AND status IN ('agendado','enviando')", id);
+  if (acao === 'reenviar-erros') {
+    await executar("UPDATE envio_destinos SET status = 'pendente', erro = NULL WHERE envio_id = ? AND status = 'erro'", id);
+    await executar("UPDATE envios SET status = 'agendado', erros = 0, agendado_para = ? WHERE id = ?", new Date().toISOString(), id);
+  }
+  if (acao === 'excluir') {
+    const e = await um<{ midia_chave: string | null }>('SELECT midia_chave FROM envios WHERE id = ?', id);
+    await apagarMidia(e?.midia_chave);
+    await executar('DELETE FROM envio_destinos WHERE envio_id = ?', id);
+    await executar('DELETE FROM envios WHERE id = ?', id);
+  }
+  return Astro.redirect('/admin/whatsapp/');
+}
+
+type Envio = { id: number; titulo: string; corpo: string; status: string; agendado_para: string; total: number; enviados: number; erros: number; canal: string; midia_tipo: string | null; evento_id: number | null };
+const envios = await todos<Envio>(
+  'SELECT e.*, c.nome canal FROM envios e LEFT JOIN canais c ON c.id = e.canal_id ORDER BY CASE WHEN e.status IN (\'agendado\',\'enviando\') THEN 0 ELSE 1 END, e.agendado_para DESC LIMIT 200');
+const ver = Number(Astro.url.searchParams.get('ver')) || 0;
+const destinos = ver ? await todos<{ destino: string; nome: string; status: string; erro: string }>('SELECT * FROM envio_destinos WHERE envio_id = ? ORDER BY id', ver) : [];
+---
+<Admin titulo="WhatsApp">
+  <a slot="acoes" href="/admin/whatsapp/novo/" class="btn btn-primario"><Icone nome="mais" class="size-4" /> Nova mensagem</a>
+  {envios.length ? (
+    <div class="adm-card overflow-x-auto p-0 sm:p-0">
+      <table class="adm-tabela">
+        <thead><tr><th>Mensagem</th><th>Quando</th><th>Progresso</th><th></th></tr></thead>
+        <tbody>
+          {envios.map((e) => (
+            <tr>
+              <td class="max-w-md">
+                <span class={`adm-selo ${STATUS_ENVIO[e.status]?.[1]}`}>{STATUS_ENVIO[e.status]?.[0]}</span>
+                {e.evento_id && <a href={`/admin/calendario/evento/?id=${e.evento_id}`} class="adm-selo ml-1 bg-laranja-50 text-laranja-700">lembrete</a>}
+                <b class="mt-1 block">{e.titulo}</b>
+                <span class="line-clamp-1 text-xs text-tinta-suave">{e.midia_tipo && `[${e.midia_tipo}] `}{e.corpo}</span>
+              </td>
+              <td class="whitespace-nowrap">{fmtDataHora(e.agendado_para)}<span class="block text-xs text-tinta-suave">{e.canal ?? 'canal excluído'}</span></td>
+              <td class="min-w-32">
+                <span class="text-xs">{e.enviados}/{e.total}{e.erros > 0 && <b class="text-red-700"> · {e.erros} erro(s)</b>}</span>
+                <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-tinta/8"><span class="block h-full bg-green-500" style={`width:${e.total ? ((e.enviados + e.erros) / e.total) * 100 : 0}%`}></span></span>
+              </td>
+              <td class="text-right whitespace-nowrap">
+                <form method="post" class="inline-flex gap-1">
+                  <input type="hidden" name="id" value={e.id} />
+                  <a href={`?ver=${e.id}#detalhe`} class="btn btn-contorno adm-btn-p">Detalhes</a>
+                  {['agendado', 'enviando'].includes(e.status) && <button name="acao" value="cancelar" class="btn btn-contorno adm-btn-p" data-confirmar="Cancelar este envio?">Cancelar</button>}
+                  {e.erros > 0 && e.status !== 'enviando' && <button name="acao" value="reenviar-erros" class="btn btn-contorno adm-btn-p">Reenviar erros</button>}
+                  {!['enviando'].includes(e.status) && <button name="acao" value="excluir" class="btn btn-contorno adm-btn-p text-red-700" data-confirmar="Excluir este envio do histórico?">Excluir</button>}
+                </form>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : <p class="adm-vazio">Nenhuma mensagem ainda. <a href="/admin/whatsapp/novo/" class="font-bold text-laranja-700">Criar a primeira</a>.</p>}
+
+  {ver > 0 && (
+    <section id="detalhe" class="adm-card mt-6">
+      <h2 class="font-extrabold">Destinatários</h2>
+      <ul class="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+        {destinos.map((d) => (
+          <li class="flex items-center gap-2"><span class={`adm-selo ${STATUS_ENVIO[d.status === 'pendente' ? 'agendado' : d.status]?.[1]}`}>{d.status}</span> {d.nome}{d.erro && <span class="text-xs text-red-700" title={d.erro}>· {d.erro.slice(0, 60)}</span>}</li>
+        ))}
+      </ul>
+    </section>
+  )}
+  <form method="post" action="/api/admin/fila/" class="mt-6"><button class="btn btn-contorno adm-btn-p">Processar fila agora</button></form>
+  <p class="mt-3 text-xs text-tinta-suave">As mensagens saem aos poucos (a cada minuto, com intervalo entre elas) para proteger o número contra bloqueio.</p>
+</Admin>
