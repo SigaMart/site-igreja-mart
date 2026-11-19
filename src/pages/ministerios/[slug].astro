@@ -42,8 +42,9 @@ const schema = {
     <!-- O versículo aparece entre o 1º parágrafo e o restante do texto (ordem visual via CSS) -->
     <article class="prosa prosa-com-verso">
       <Content />
-      <figure class="verso-meio rounded-3xl border-l-4 border-laranja-500 bg-laranja-50 px-6 py-5 sm:px-8">
-        <blockquote class="verso text-xl leading-snug text-tinta sm:text-2xl">“{v.texto}”</blockquote>
+      <figure class="verso-meio rounded-3xl bg-laranja-50 px-6 py-6 sm:px-8">
+        <span aria-hidden="true" class="block font-serif text-5xl leading-none text-laranja-500 italic">“</span>
+        <blockquote class="verso m-0 rounded-none border-0 bg-transparent p-0 text-xl leading-snug text-tinta sm:text-2xl">{v.texto}</blockquote>
         <figcaption class="mt-3 text-sm font-bold not-italic"><a href={v.url} class="text-laranja-700 no-underline hover:underline">{v.referencia}</a></figcaption>
       </figure>
     </article>
