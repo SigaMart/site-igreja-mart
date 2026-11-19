@@ -1,0 +1,29 @@
+---
+// Editor visual de texto (sem Markdown): barra de ferramentas, imagens e vídeos. Ver src/scripts/admin/editor.ts.
+interface Props { name: string; valor?: string; rotulo?: string }
+const { name, valor = '', rotulo = 'Texto' } = Astro.props;
+---
+<div data-editor-visual class="editor-caixa">
+  <span class="adm-rotulo">{rotulo}</span>
+  <div class="mt-1.5 overflow-hidden rounded-2xl border border-tinta/15 bg-white focus-within:border-laranja-500 focus-within:ring-2 focus-within:ring-laranja-100">
+    <div data-barra-editor class="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-tinta/10 bg-creme/95 px-2 py-1.5 backdrop-blur"></div>
+    <p data-enviando hidden class="bg-laranja-50 px-4 py-1.5 text-xs font-bold text-laranja-800">Enviando imagem…</p>
+    <div data-editor></div>
+  </div>
+  <textarea name={name} data-campo="texto" hidden>{valor}</textarea>
+</div>
+
+<style is:global>
+  .editor-botao { display: inline-flex; min-width: 2rem; height: 2rem; align-items: center; justify-content: center; border-radius: 0.6rem; color: var(--color-tinta); font-size: 0.875rem; }
+  .editor-botao:hover { background: white; }
+  .editor-botao.ativo { background: var(--color-tinta); color: white; }
+  .editor-visual { color: var(--color-tinta); }
+  .editor-visual p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; pointer-events: none; color: color-mix(in srgb, var(--color-tinta-suave) 60%, transparent); }
+  .editor-visual img.ProseMirror-selectednode, .editor-visual figure.ProseMirror-selectednode, .editor-visual div[data-youtube-video].ProseMirror-selectednode { outline: 3px solid var(--color-laranja-400); border-radius: 1rem; }
+  .editor-visual hr { border-color: color-mix(in srgb, var(--color-tinta) 15%, transparent); margin-block: 1.5rem; }
+</style>
+
+<script>
+  import { criarEditor } from '../../scripts/admin/editor';
+  document.querySelectorAll<HTMLElement>('[data-editor-visual]').forEach((el) => criarEditor(el));
+</script>

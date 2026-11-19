@@ -101,6 +101,20 @@
   .prosa blockquote {
     @apply rounded-2xl border-l-4 border-laranja-500 bg-laranja-50 px-6 py-4 font-serif text-lg text-tinta italic;
   }
+  /* Imagens e vídeos inseridos pelo editor visual do painel */
+  .prosa img {
+    @apply mx-auto h-auto max-w-full rounded-2xl;
+  }
+  .prosa figure.video video,
+  .prosa div[data-youtube-video] iframe {
+    @apply aspect-video h-auto w-full rounded-2xl bg-tinta;
+  }
+  .prosa hr {
+    @apply my-8 border-tinta/10;
+  }
+  .prosa u {
+    @apply underline-offset-4;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

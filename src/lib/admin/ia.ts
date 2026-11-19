@@ -60,7 +60,9 @@ export type CamposConteudo = {
 const INSTRUCOES: Record<string, string> = {
   texto: `"texto": o texto principal reorganizado e formatado em Markdown. Corrija ortografia, pontuação e quebras de linha,
 divida em parágrafos curtos, use **negrito** com moderação para as ideias principais e subtítulos "## " só se o texto for longo.
-Mantenha a voz, o conteúdo e o tamanho do autor: não resuma, não acrescente ideias novas. Não repita o título nem o versículo no começo.`,
+Mantenha a voz, o conteúdo e o tamanho do autor: não resuma, não acrescente ideias novas. Não repita o título nem o versículo no começo.
+O texto pode chegar em HTML (vindo do editor visual). Responda em Markdown, mas mantenha imagens e vídeos
+(<img>, <figure class="video">…</figure>, <div data-youtube-video>…</div>) exatamente como estão, em HTML, no mesmo lugar, cada um em uma linha própria.`,
   titulo: `"titulo": um título curto (até 60 caracteres), convidativo, sem ponto final.`,
   descricao: `"descricao": um resumo de 1 a 2 frases (até 160 caracteres) para o Google e o WhatsApp.`,
   versiculo: `"versiculo": a referência bíblica central do texto (ex.: "Mateus 7:24-25"). Se o texto já cita uma, use ela.`,

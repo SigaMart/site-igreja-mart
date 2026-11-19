@@ -5,6 +5,7 @@ export const prerender = false;
 import Admin from '../../../layouts/Admin.astro';
 import Icone from '../../../components/Icone.astro';
 import SeletorImagem from '../../../components/admin/SeletorImagem.astro';
+import EditorVisual from '../../../components/admin/EditorVisual.astro';
 import { TIPOS } from '../../../lib/admin/conteudo';
 import { ler, gravar, apagar, lerMarkdown, montarMarkdown, slugificar } from '../../../lib/admin/github';
 import { brParaUtc, utcParaBr, todos, fmtDataHora } from '../../../lib/admin/db';
@@ -137,21 +138,8 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
         <button type="button" data-desfazer hidden class="ml-auto text-xs font-bold text-laranja-700 underline">Desfazer</button>
         <span data-ia-status class="w-full text-xs text-tinta-suave" hidden></span>
       </div>
-      <div>
-        <div class="flex items-end justify-between gap-2">
-          <span class="adm-rotulo">Texto</span>
-          <span class="flex flex-wrap gap-1">
-            <button type="button" data-ins="**|**" class="btn btn-contorno adm-btn-p font-extrabold">B</button>
-            <button type="button" data-ins="*|*" class="btn btn-contorno adm-btn-p italic">I</button>
-            <button type="button" data-ins={'\n## |\n'} class="btn btn-contorno adm-btn-p">Subtítulo</button>
-            <button type="button" data-ins={'\n- |'} class="btn btn-contorno adm-btn-p">Lista</button>
-            <button type="button" data-ins={'\n> |'} class="btn btn-contorno adm-btn-p">Citação</button>
-            <button type="button" data-ins="[|](https://)" class="btn btn-contorno adm-btn-p">Link</button>
-          </span>
-        </div>
-        <textarea name="corpo" rows="24" class="adm-campo font-mono text-[0.85rem] leading-relaxed" data-campo="texto" placeholder="Cole ou escreva o texto aqui. Depois use o assistente para organizar a formatação.">{corpo}</textarea>
-        <span class="adm-dica">**negrito**, *itálico*, ## subtítulo, - lista, &gt; citação. Deixe uma linha em branco entre parágrafos.</span>
-      </div>
+      <EditorVisual name="corpo" valor={corpo} rotulo="Texto" />
+      <span class="adm-dica">Arraste ou cole imagens direto no texto. Para vídeos, use o botão Vídeo (link do YouTube ou arquivo).</span>
     </div>
     <div class="space-y-4">
       <div class="adm-card space-y-4">
@@ -226,16 +214,6 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
   const form = document.getElementById('editor-conteudo') as HTMLFormElement;
   const tipo = form.dataset.tipo!;
   const campo = (k: string) => form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-campo="${k}"]`);
-  const texto = campo('texto') as HTMLTextAreaElement;
-
-  // Barra de formatação
-  form.querySelectorAll<HTMLButtonElement>('[data-ins]').forEach((b) => b.addEventListener('click', () => {
-    const [antes, depois] = b.dataset.ins!.split('|');
-    const { selectionStart: a, selectionEnd: z, value: v } = texto;
-    texto.setRangeText(antes + v.slice(a, z) + depois, a, z, 'end');
-    texto.focus();
-  }));
-
   // ---------- Assistente de IA
   const status = form.querySelector<HTMLElement>('[data-ia-status]')!;
   const desfazer = form.querySelector<HTMLButtonElement>('[data-desfazer]')!;
@@ -263,7 +241,7 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
       anterior = v;
       for (const [k, val] of Object.entries(r as Record<string, string>)) {
         const el = campo(k);
-        if (el && typeof val === 'string' && val.trim()) { el.value = val.trim(); el.classList.add('ring-2', 'ring-violet-300'); setTimeout(() => el.classList.remove('ring-2', 'ring-violet-300'), 2500); }
+        if (el && typeof val === 'string' && val.trim()) { el.value = val.trim(); el.dispatchEvent(new Event('input')); el.classList.add('ring-2', 'ring-violet-300'); setTimeout(() => el.classList.remove('ring-2', 'ring-violet-300'), 2500); }
       }
       desfazer.hidden = false;
       status.textContent = 'Pronto! Confira antes de salvar.';
@@ -275,7 +253,7 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
   }));
   desfazer.addEventListener('click', () => {
     if (!anterior) return;
-    for (const [k, val] of Object.entries(anterior)) { const el = campo(k); if (el) el.value = val; }
+    for (const [k, val] of Object.entries(anterior)) { const el = campo(k); if (el) { el.value = val; el.dispatchEvent(new Event('input')); } }
     anterior = null; desfazer.hidden = true; status.textContent = 'Desfeito.';
   });
 

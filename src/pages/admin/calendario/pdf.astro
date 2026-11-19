@@ -4,8 +4,6 @@
 export const prerender = false;
 import '../../../styles/global.css';
 import '../../../styles/admin.css';
-import { getImage } from 'astro:assets';
-import logo from '../../../assets/logo/logo-clara.png';
 import { SITE } from '../../../config/site';
 import { todos, brParaUtc, utcParaBr } from '../../../lib/admin/db';
 
@@ -19,7 +17,8 @@ const escolhidos = q.has('cal') ? q.getAll('cal').map(Number) : calendarios.map(
 const formato = q.get('formato') === 'grade' ? 'grade' : 'lista';
 const comDescricao = q.get('descricao') !== '0';
 const tituloDoc = q.get('titulo')?.trim() || 'Agenda da Igreja MART';
-const logoImg = await getImage({ src: logo, width: 160 });
+// Arquivo fixo em public/: o painel roda no servidor, onde a otimização de imagens do build não existe
+const logoImg = { src: '/marca/logo.png' };
 
 // Meses do período
 const meses: string[] = [];

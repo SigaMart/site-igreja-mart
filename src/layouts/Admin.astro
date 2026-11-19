@@ -3,13 +3,12 @@
 import '../styles/global.css';
 import '../styles/admin.css';
 import Icone from '../components/Icone.astro';
-import logo from '../assets/logo/logo-clara.png';
-import { getImage } from 'astro:assets';
 
 interface Props { titulo: string; acoes?: boolean }
 const { titulo } = Astro.props;
 const usuario = Astro.locals.usuario;
-const logoImg = await getImage({ src: logo, width: 96 });
+// Arquivo fixo em public/: o painel roda no servidor, onde a otimização de imagens do build não existe
+const logoImg = { src: '/marca/logo.png' };
 
 const MENU = [
   { href: '/admin/', rotulo: 'Início', icone: 'painel' },
