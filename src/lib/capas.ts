@@ -21,11 +21,11 @@ const DOMINIO = SITE.url.replace(/^https?:\/\//, '');
 export type Capa =
   | { tipo: 'pagina'; eyebrow: string; titulo: string; texto?: string; foto: string }
   | { tipo: 'verso'; eyebrow: string; texto: string; referencia: string }
-  | { tipo: 'livro'; eyebrow: string; titulo: string; subtitulo?: string; trecho?: string };
+  | { tipo: 'livro'; eyebrow: string; titulo: string; destaque?: string; subtitulo?: string; trecho?: string; referencia?: string; foto: string };
 
 // ---------- Fontes e imagens (carregadas uma vez)
 const fonte = (pacote: string, arquivo: string) => readFile(require.resolve(`${pacote}/files/${arquivo}`));
-let recursos: Promise<{ fontes: any[]; logo: string }> | null = null;
+let recursos: Promise<{ fontes: any[]; logo: string; logoBranco: string }> | null = null;
 function carregarRecursos() {
   recursos ??= (async () => {
     const [j500, j700, j800, f600] = await Promise.all([
@@ -36,6 +36,7 @@ function carregarRecursos() {
     ]);
     const logoArq = join(RAIZ, 'src/assets/logo/logo-clara.png');
     const logo = await sharp(logoArq).resize({ height: 180 }).png().toBuffer();
+    const logoBranco = await sharp(join(RAIZ, 'src/assets/logo/logo-padrao-3x.png')).resize({ height: 180 }).png().toBuffer();
     return {
       fontes: [
         { name: 'Jakarta', data: j500, weight: 500, style: 'normal' },
@@ -44,6 +45,7 @@ function carregarRecursos() {
         { name: 'Fraunces', data: f600, weight: 600, style: 'italic' },
       ],
       logo: `data:image/png;base64,${logo.toString('base64')}`,
+      logoBranco: `data:image/png;base64,${logoBranco.toString('base64')}`,
     };
   })();
   return recursos;
@@ -61,6 +63,13 @@ export function caminhoImagem(img: ImageMetadata | string) {
 const fotoBase64 = async (arquivo: string) =>
   `data:image/jpeg;base64,${(await sharp(arquivo).resize(500, H, { fit: 'cover', position: 'attention' }).jpeg({ quality: 82 }).toBuffer()).toString('base64')}`;
 
+// Paisagem de fundo inteira (as capas da Bíblia repetem poucas fotos: guarda em memória)
+const fundos = new Map<string, Promise<string>>();
+const fundoBase64 = (arquivo: string) => {
+  if (!fundos.has(arquivo)) fundos.set(arquivo, sharp(arquivo).resize(W, H, { fit: 'cover', position: 'attention' }).modulate({ saturation: 1.05 }).jpeg({ quality: 84 }).toBuffer().then((b) => `data:image/jpeg;base64,${b.toString('base64')}`));
+  return fundos.get(arquivo)!;
+};
+
 // ---------- Mini "JSX" para o satori
 type No = { type: string; props: Record<string, any> };
 const h = (type: string, style: Record<string, any>, ...filhos: (No | string | null | false | undefined)[]): No => ({
@@ -69,6 +78,8 @@ const h = (type: string, style: Record<string, any>, ...filhos: (No | string | n
 });
 const img = (src: string, style: Record<string, any>): No => ({ type: 'img', props: { src, style } });
 
+// Tira marcações do texto (ex.: "[Nun] :" nas estrofes do Salmo 119) e troca a vírgula final por reticências
+const limparTrecho = (t: string) => t.replace(/^\[[^\]]+\]\s*:?\s*/, '').replace(/[,;:]$/, '…');
 export const cortar = (t: string, max: number) => (t.length <= max ? t : t.slice(0, t.lastIndexOf(' ', max - 1)).replace(/[,;:.]$/, '') + '…');
 
 const marca = (logo: string, tam = 1) =>
@@ -88,7 +99,7 @@ const rodape = () =>
 
 const eyebrow = (t: string) => h('span', { fontSize: 20, fontWeight: 800, letterSpacing: 3, color: COR.laranjaEsc, textTransform: 'uppercase' }, t);
 
-async function layout(c: Capa, logo: string): Promise<No> {
+async function layout(c: Capa, logo: string, logoBranco: string): Promise<No> {
   if (c.tipo === 'pagina') {
     const tam = c.titulo.length > 46 ? 48 : c.titulo.length > 30 ? 56 : 64;
     return h('div', { width: W, height: H, background: COR.creme, fontFamily: 'Jakarta' },
@@ -131,27 +142,50 @@ async function layout(c: Capa, logo: string): Promise<No> {
     );
   }
 
-  return quadro(
-    topo,
-    h('div', { flexDirection: 'column', gap: 14, width: CW },
-      h('span', { fontSize: 84, fontWeight: 800, letterSpacing: -2, lineHeight: 1, color: COR.tinta }, c.titulo),
-      c.subtitulo ? h('span', { fontSize: 24, fontWeight: 700, color: COR.laranjaEsc }, c.subtitulo) : null,
-      c.trecho ? h('span', { marginTop: 8, fontFamily: 'Fraunces', fontStyle: 'italic', fontWeight: 600, fontSize: 32, lineHeight: 1.32, color: COR.suave }, `“${cortar(c.trecho, 170)}”`) : null,
+  // Bíblia: paisagem do grupo do livro, escurecida à esquerda, com o livro em destaque
+  const branco = (a: number) => `rgba(255,255,255,${a})`;
+  const tamTitulo = c.titulo.length > 14 ? 76 : 96;
+  return h('div', { width: W, height: H, fontFamily: 'Jakarta', background: '#1a120d' },
+    img(await fundoBase64(c.foto), { position: 'absolute', left: 0, top: 0, width: W, height: H }),
+    h('div', { position: 'absolute', left: 0, top: 0, width: W, height: H, backgroundImage: 'linear-gradient(90deg, rgba(18,11,7,0.92) 0%, rgba(18,11,7,0.78) 48%, rgba(18,11,7,0.25) 100%)' }),
+    h('div', { position: 'absolute', left: 72, top: 50, width: CW, height: H - 96, flexDirection: 'column', justifyContent: 'space-between' },
+      h('div', { alignItems: 'center', justifyContent: 'space-between', width: CW },
+        h('div', { alignItems: 'center', gap: 14 },
+          img(logoBranco, { height: 54 }),
+          h('div', { flexDirection: 'column', lineHeight: 1.15 },
+            h('span', { fontSize: 25, fontWeight: 800, color: '#fff' }, SITE.nome),
+            h('span', { fontSize: 16, fontWeight: 500, color: branco(0.7) }, 'Restauração do Templo'),
+          ),
+        ),
+        h('span', { padding: '9px 18px', borderRadius: 999, background: branco(0.14), border: `1px solid ${branco(0.25)}`, fontSize: 17, fontWeight: 800, letterSpacing: 2, color: '#fff', textTransform: 'uppercase' }, 'Bíblia online'),
+      ),
+      h('div', { flexDirection: 'column', width: 820 },
+        h('span', { fontSize: 19, fontWeight: 800, letterSpacing: 3, color: '#fdba74', textTransform: 'uppercase' }, c.eyebrow),
+        h('div', { alignItems: 'flex-end', gap: 22, marginTop: 6 },
+          h('span', { fontSize: tamTitulo, fontWeight: 800, letterSpacing: -2.5, lineHeight: 1.05, color: '#fff' }, c.titulo),
+          c.destaque ? h('span', { fontSize: tamTitulo, fontWeight: 800, letterSpacing: -2.5, lineHeight: 1.05, color: COR.laranja }, c.destaque) : null,
+        ),
+        c.subtitulo ? h('span', { marginTop: 6, fontSize: 22, fontWeight: 600, color: branco(0.75) }, c.subtitulo) : null,
+        c.trecho ? h('div', { marginTop: 26, paddingLeft: 22, borderLeft: `4px solid ${COR.laranja}`, flexDirection: 'column' },
+          h('span', { fontFamily: 'Fraunces', fontStyle: 'italic', fontWeight: 600, fontSize: 30, lineHeight: 1.32, color: branco(0.94) }, `“${limparTrecho(cortar(c.trecho, 150))}”`),
+          c.referencia ? h('span', { marginTop: 10, fontSize: 17, fontWeight: 800, letterSpacing: 2, color: '#fdba74', textTransform: 'uppercase' }, c.referencia) : null,
+        ) : null,
+      ),
+      h('span', { fontSize: 21, fontWeight: 800, color: '#fff' }, DOMINIO),
     ),
-    rodape(),
   );
 }
 
 // ---------- Geração (com cache em disco para builds locais mais rápidos)
-const VERSAO = '5';
+const VERSAO = '8';
 const PASTA_CACHE = join(RAIZ, 'node_modules/.cache/capas') + '/';
 
 export async function gerarCapa(c: Capa) {
   const chave = createHash('sha1').update(VERSAO + JSON.stringify(c)).digest('hex');
   const arqCache = PASTA_CACHE + chave + '.jpg';
   if (existsSync(arqCache)) return readFile(arqCache);
-  const { fontes, logo } = await carregarRecursos();
-  const svg = await satori((await layout(c, logo)) as any, { width: W, height: H, fonts: fontes });
+  const { fontes, logo, logoBranco } = await carregarRecursos();
+  const svg = await satori((await layout(c, logo, logoBranco)) as any, { width: W, height: H, fonts: fontes });
   const jpg = await sharp(Buffer.from(svg)).jpeg({ quality: 86, mozjpeg: true }).toBuffer();
   await mkdir(PASTA_CACHE, { recursive: true }).catch(() => {});
   await writeFile(arqCache, jpg).catch(() => {});

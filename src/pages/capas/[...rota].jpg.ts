@@ -18,7 +18,25 @@ const PAGINAS: Record<string, Capa> = {
   '/blog/': { tipo: 'pagina', eyebrow: 'Blog', titulo: 'Textos para a sua caminhada', foto: caminhoImagem('fotos/mart/culto-atual.jpg') },
   '/oracao/': { tipo: 'pagina', eyebrow: 'Pedido de oração', titulo: 'A gente ora por você', texto: 'Conte o que está no seu coração.', foto: caminhoImagem('fotos/mart/reunidos.jpg') },
   '/contato/': { tipo: 'pagina', eyebrow: 'Contato', titulo: 'Fale com a gente', texto: `${SITE.endereco.rua}, ${SITE.endereco.bairro}`, foto: caminhoImagem('fotos/mart/adoracao2.jpg') },
-  '/biblia/': { tipo: 'livro', eyebrow: 'Bíblia online', titulo: 'Bíblia online', subtitulo: 'Leia e pesquise por livro, capítulo ou palavra', trecho: passagem('Salmos 119:105').texto },
+  '/biblia/': { tipo: 'livro', eyebrow: '66 livros · Tradução Bíblia Livre', titulo: 'Leia a', destaque: 'Bíblia', subtitulo: 'Leia e pesquise por livro, capítulo ou palavra', trecho: passagem('Salmos 119:105').texto, referencia: 'Salmos 119:105', foto: caminhoImagem('fotos/natureza/paisagem-3.jpg') },
+};
+
+// Cada grupo de livros da Bíblia tem a sua paisagem (índices na ordem de livros.json)
+const GRUPOS: { ate: number; nome: string; foto: number }[] = [
+  { ate: 4, nome: 'Pentateuco', foto: 8 }, // Gênesis a Deuteronômio: criação
+  { ate: 16, nome: 'Livros históricos', foto: 5 }, // Josué a Ester: a caminhada do povo
+  { ate: 21, nome: 'Livros poéticos', foto: 2 }, // Jó a Cantares
+  { ate: 26, nome: 'Profetas maiores', foto: 6 }, // Isaías a Daniel
+  { ate: 38, nome: 'Profetas menores', foto: 10 }, // Oseias a Malaquias
+  { ate: 42, nome: 'Evangelhos', foto: 4 }, // Mateus a João: o mar da Galileia
+  { ate: 43, nome: 'História da Igreja', foto: 1 }, // Atos
+  { ate: 56, nome: 'Cartas de Paulo', foto: 9 }, // Romanos a Filemom
+  { ate: 64, nome: 'Cartas gerais', foto: 7 }, // Hebreus a Judas
+  { ate: 65, nome: 'Profecia', foto: 3 }, // Apocalipse: novo céu e nova terra
+];
+const grupoDoLivro = (i: number) => {
+  const g = GRUPOS.find((x) => i <= x.ate)!;
+  return { nome: g.nome, foto: caminhoImagem(`fotos/natureza/paisagem-${g.foto}.jpg`) };
 };
 
 export const getStaticPaths = (async () => {
@@ -34,16 +52,27 @@ export const getStaticPaths = (async () => {
   for (const m of await getCollection('ministerios')) {
     capas[`/ministerios/${m.id}/`] = { tipo: 'pagina', eyebrow: 'Ministério', titulo: m.data.nome, foto: caminhoImagem(m.data.imagem) };
   }
-  for (const l of livros) {
+  livros.forEach((l, i) => {
+    const g = grupoDoLivro(i);
     const testamento = l.testamento === 'AT' ? 'Antigo Testamento' : 'Novo Testamento';
-    capas[`/biblia/${l.slug}/`] = { tipo: 'livro', eyebrow: 'Bíblia online', titulo: l.nome, subtitulo: `${l.caps} ${l.caps > 1 ? 'capítulos' : 'capítulo'} · ${testamento}`, trecho: capitulo(l.slug, 1)[0] };
+    const eyebrow = `${g.nome} · ${testamento}`;
+    capas[`/biblia/${l.slug}/`] = {
+      tipo: 'livro', eyebrow, titulo: l.nome, foto: g.foto,
+      subtitulo: `${l.caps} ${l.caps > 1 ? 'capítulos' : 'capítulo'}`,
+      trecho: capitulo(l.slug, 1)[0], referencia: `${l.nome} 1:1`,
+    };
     for (let cap = 1; cap <= l.caps; cap++) {
       const versos = capitulo(l.slug, cap);
-      let trecho = '';
-      for (const v of versos) { if (trecho.length > 120) break; trecho += (trecho ? ' ' : '') + v; }
-      capas[`/biblia/${l.slug}/${cap}/`] = { tipo: 'livro', eyebrow: 'Bíblia online', titulo: `${l.nome} ${cap}`, subtitulo: `${versos.length} versículos · ${testamento}`, trecho };
+      // Começo do capítulo: o 1º versículo (e o 2º, se o 1º for curto)
+      let trecho = '', n = 0;
+      for (const v of versos) { if (trecho.length > 80) break; trecho += (trecho ? ' ' : '') + v; n++; }
+      capas[`/biblia/${l.slug}/${cap}/`] = {
+        tipo: 'livro', eyebrow, titulo: l.nome, destaque: String(cap), foto: g.foto,
+        subtitulo: `${versos.length} versículos`,
+        trecho, referencia: `${l.nome} ${cap}:1${n > 1 ? `-${n}` : ''}`,
+      };
     }
-  }
+  });
 
   return Object.entries(capas).map(([pagina, capa]) => ({
     params: { rota: `${pagina.slice(1)}capa` },

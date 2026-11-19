@@ -41,7 +41,8 @@ for (const linha of linhas) {
   const livro = porCodigo[m[1]];
   if (!livro) throw new Error('Livro desconhecido: ' + m[1]);
   const cap = Number(m[2]) - 1, vers = Number(m[3]) - 1;
-  (livro.capitulos[cap] ??= [])[vers] = m[4].trim();
+  // O arquivo original às vezes cola a frase seguinte no ponto ("Hacalias.E aconteceu"): devolve o espaço.
+  (livro.capitulos[cap] ??= [])[vers] = m[4].trim().replace(/([a-záéíóúãõâêôçà][.!?;:])([A-ZÁÉÍÓÚÂÊÔÀ])/g, '$1 $2');
 }
 for (const l of livros) l.capitulos = l.capitulos.map((c) => c.map((v) => v ?? ''));
 
