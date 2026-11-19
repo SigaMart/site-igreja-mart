@@ -8,7 +8,7 @@ export const TIPOS: Record<string, TipoConteudo> = {
     chamada: '*Leia o devocional completo através do nosso site:*',
     campos: [
       { k: 'titulo', rotulo: 'Título', obrigatorio: true, ia: true },
-      { k: 'versiculo', rotulo: 'Versículo', dica: 'Ex.: Salmos 23:1-3. Só a referência: o texto do versículo vem da Bíblia do site (não da IA).', obrigatorio: true, ia: true },
+      { k: 'versiculo', rotulo: 'Versículo', dica: 'Use a lupa para procurar e marcar os versículos. O texto vem da Bíblia do site (não da IA).', obrigatorio: true, ia: true },
       { k: 'descricao', rotulo: 'Resumo', tipo: 'area', dica: 'Uma ou duas frases. Aparece no Google e no WhatsApp.', obrigatorio: true, ia: true },
       { k: 'data', rotulo: 'Publicar em', tipo: 'datahora', dica: 'Data futura: o devocional só aparece no site nesse dia e hora.', obrigatorio: true },
       { k: 'autor', rotulo: 'Autor', dica: 'Em branco: Equipe de Devocionais MART' },

@@ -1,0 +1,168 @@
+---
+// Popup para escolher o versículo na Bíblia do site (lupa ao lado do campo "Versículo").
+// Abre com um botão [data-abrir-versiculo] e devolve a referência no campo [data-campo="versiculo"].
+import Icone from '../Icone.astro';
+import { livros } from '../../lib/referencia';
+---
+<dialog data-buscar-versiculo class="m-auto w-[min(94vw,44rem)] rounded-3xl p-0 backdrop:bg-tinta/60">
+  <div class="flex h-[min(88vh,46rem)] flex-col">
+    <div class="space-y-3 border-b border-tinta/8 px-5 py-4">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="flex items-center gap-2 text-lg font-extrabold"><Icone nome="livro" class="size-5 text-laranja-600" /> Escolher versículo</h3>
+        <button type="button" data-fechar class="rounded-full p-1.5 hover:bg-creme" aria-label="Fechar"><Icone nome="fechar" class="size-5" /></button>
+      </div>
+      <div class="relative">
+        <Icone nome="busca" class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-tinta-suave" />
+        <input data-q type="search" class="adm-campo !mt-0 !pl-9" placeholder="Referência (Mateus 7) ou palavras (casa sobre a rocha)" autocomplete="off" />
+      </div>
+      <div class="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
+        <select data-livro class="adm-campo !mt-0">
+          <option value="">Livro…</option>
+          <optgroup label="Antigo Testamento">{livros.filter((l) => l.testamento === 'AT').map((l) => <option value={l.slug}>{l.nome}</option>)}</optgroup>
+          <optgroup label="Novo Testamento">{livros.filter((l) => l.testamento !== 'AT').map((l) => <option value={l.slug}>{l.nome}</option>)}</optgroup>
+        </select>
+        <select data-cap class="adm-campo !mt-0" disabled><option value="">Capítulo</option></select>
+      </div>
+    </div>
+    <div data-area class="flex-1 overflow-auto px-5 py-3 text-sm">
+      <p class="py-10 text-center text-tinta-suave">Pesquise uma referência ou palavras, ou escolha o livro e o capítulo.</p>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-tinta/8 px-5 py-3">
+      <p data-escolha class="text-sm text-tinta-suave">Clique num versículo. Para um trecho, clique no primeiro e depois no último.</p>
+      <button type="button" data-usar class="btn btn-primario" disabled>Usar este versículo</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  import { interpretarReferencia, normalizar, livros } from '../../lib/referencia';
+
+  const dlg = document.querySelector<HTMLDialogElement>('[data-buscar-versiculo]')!;
+  const campo = document.querySelector<HTMLInputElement>('[data-campo="versiculo"]');
+  const q = dlg.querySelector<HTMLInputElement>('[data-q]')!;
+  const selLivro = dlg.querySelector<HTMLSelectElement>('[data-livro]')!;
+  const selCap = dlg.querySelector<HTMLSelectElement>('[data-cap]')!;
+  const area = dlg.querySelector<HTMLElement>('[data-area]')!;
+  const escolha = dlg.querySelector<HTMLElement>('[data-escolha]')!;
+  const usar = dlg.querySelector<HTMLButtonElement>('[data-usar]')!;
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+  type LivroJson = { capitulos: string[][] };
+  const cacheLivro = new Map<string, Promise<LivroJson>>();
+  const lerLivro = (slug: string) => {
+    if (!cacheLivro.has(slug)) cacheLivro.set(slug, fetch(`/dados/biblia/${slug}.json`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }));
+    return cacheLivro.get(slug)!;
+  };
+  let biblia: Promise<{ slug: string; nome: string; capitulos: string[][] }[]> | null = null;
+
+  // Seleção atual
+  let livro = '', cap = 0, ini = 0, fim = 0, versos: string[] = [];
+  const nomeLivro = (slug: string) => livros.find((l) => l.slug === slug)?.nome ?? slug;
+  const referencia = () => !ini ? '' : `${nomeLivro(livro)} ${cap}:${ini}${fim > ini ? `-${fim}` : ''}`;
+
+  function atualizarEscolha() {
+    const ref = referencia();
+    usar.disabled = !ref;
+    if (!ref) { escolha.innerHTML = 'Clique num versículo. Para um trecho, clique no primeiro e depois no último.'; return; }
+    escolha.innerHTML = `<b class="text-tinta">${esc(ref)}</b> <span class="text-xs">· clique em outro para mudar o trecho</span>`;
+    area.querySelectorAll<HTMLElement>('[data-v]').forEach((el) => {
+      const n = Number(el.dataset.v);
+      el.classList.toggle('bg-laranja-100', n >= ini && n <= fim);
+      el.classList.toggle('ring-1', n >= ini && n <= fim);
+    });
+  }
+
+  async function abrirCapitulo(slug: string, c: number, a = 0, b = 0) {
+    livro = slug; cap = c; ini = a; fim = b || a;
+    selLivro.value = slug;
+    preencherCaps(slug); selCap.value = String(c);
+    area.innerHTML = '<p class="py-10 text-center text-tinta-suave">Carregando…</p>';
+    try {
+      versos = (await lerLivro(slug)).capitulos[c - 1] ?? [];
+    } catch { area.innerHTML = '<p class="py-10 text-center text-red-700">Não consegui carregar a Bíblia. Tente de novo.</p>'; return; }
+    if (livro !== slug || cap !== c) return;
+    if (ini > versos.length) { ini = fim = 0; }
+    fim = Math.min(fim, versos.length);
+    area.innerHTML = `<h4 class="mb-2 font-extrabold text-tinta">${esc(nomeLivro(slug))} ${c}</h4>` + versos.map((t, i) =>
+      `<button type="button" data-v="${i + 1}" class="ring-laranja-300 block w-full rounded-xl px-3 py-1.5 text-left leading-relaxed hover:bg-creme"><sup class="mr-1 font-bold text-laranja-700">${i + 1}</sup>${esc(t)}</button>`).join('');
+    atualizarEscolha();
+    area.querySelector<HTMLElement>(`[data-v="${ini || 1}"]`)?.scrollIntoView({ block: 'center' });
+  }
+
+  area.addEventListener('click', (e) => {
+    const alvo = (e.target as HTMLElement).closest<HTMLElement>('[data-v], [data-ir]');
+    if (!alvo) return;
+    if (alvo.dataset.ir) { const [s, c, v] = alvo.dataset.ir.split('/'); abrirCapitulo(s, +c, +v); return; }
+    const n = Number(alvo.dataset.v);
+    // 1º clique: um versículo. 2º clique: fecha o trecho. Clique no mesmo/terceiro: recomeça.
+    if (ini && ini === fim && n !== ini) { ini = Math.min(ini, n); fim = Math.max(fim, n); }
+    else { ini = fim = n; }
+    atualizarEscolha();
+  });
+
+  function preencherCaps(slug: string) {
+    const l = livros.find((x) => x.slug === slug);
+    selCap.disabled = !l;
+    selCap.innerHTML = '<option value="">Capítulo</option>' + (l ? Array.from({ length: l.caps }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('') : '');
+  }
+  selLivro.addEventListener('change', () => {
+    preencherCaps(selLivro.value);
+    const l = livros.find((x) => x.slug === selLivro.value);
+    if (l && l.caps === 1) abrirCapitulo(l.slug, 1);
+    else if (l) { area.innerHTML = '<p class="py-10 text-center text-tinta-suave">Agora escolha o capítulo.</p>'; ini = fim = 0; atualizarEscolha(); }
+  });
+  selCap.addEventListener('change', () => { if (selLivro.value && selCap.value) abrirCapitulo(selLivro.value, +selCap.value); });
+
+  let timer = 0, seq = 0;
+  q.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(buscar, 350); });
+  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); buscar(); } });
+
+  async function buscar() {
+    const texto = q.value.trim();
+    const meu = ++seq;
+    if (texto.length < 2) return;
+    const r = interpretarReferencia(texto);
+    if (r) { abrirCapitulo(r.livro.slug, r.cap, r.vIni ?? 0, r.vFim ?? 0); return; }
+    const termos = normalizar(texto).replace(/["“”]/g, '').split(/\s+/).filter((t) => t.length > 1);
+    if (!termos.length) return;
+    area.innerHTML = '<p class="py-10 text-center text-tinta-suave">Procurando na Bíblia inteira… (a primeira busca demora um pouco)</p>';
+    let todos;
+    try { todos = await (biblia ??= fetch('/dados/biblia.json').then((x) => x.json())); }
+    catch { biblia = null; area.innerHTML = '<p class="py-10 text-center text-red-700">Não consegui carregar a Bíblia. Tente de novo.</p>'; return; }
+    if (meu !== seq) return;
+    const achados: string[] = [];
+    let total = 0;
+    for (const l of todos) l.capitulos.forEach((vs, ci) => vs.forEach((t, vi) => {
+      const n = normalizar(t);
+      if (termos.every((tt) => n.includes(tt))) {
+        total++;
+        if (achados.length < 80) achados.push(`<button type="button" data-ir="${l.slug}/${ci + 1}/${vi + 1}" class="block w-full rounded-xl px-3 py-2 text-left hover:bg-creme"><b class="text-laranja-700">${esc(l.nome)} ${ci + 1}:${vi + 1}</b> <span class="text-tinta-suave">${esc(t)}</span></button>`);
+      }
+    }));
+    livro = ''; ini = fim = 0; atualizarEscolha();
+    area.innerHTML = total
+      ? `<p class="mb-2 text-xs font-bold text-tinta-suave">${total} versículo${total > 1 ? 's' : ''}${total > 80 ? ' (mostrando 80; seja mais específico)' : ''}. Clique para abrir o capítulo.</p>${achados.join('')}`
+      : '<p class="py-10 text-center text-tinta-suave">Nada encontrado. Tente outras palavras.</p>';
+  }
+
+  usar.addEventListener('click', () => {
+    if (!campo || !referencia()) return;
+    campo.value = referencia();
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+    dlg.close();
+    campo.focus();
+  });
+  dlg.querySelector('[data-fechar]')!.addEventListener('click', () => dlg.close());
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+
+  document.querySelectorAll('[data-abrir-versiculo]').forEach((b) => b.addEventListener('click', (e) => {
+    e.preventDefault();
+    dlg.showModal();
+    const atual = campo?.value.trim() ?? '';
+    const r = atual ? interpretarReferencia(atual) : null;
+    q.value = atual;
+    if (r) abrirCapitulo(r.livro.slug, r.cap, r.vIni ?? 0, r.vFim ?? 0);
+    q.focus();
+    q.select();
+  }));
+</script>

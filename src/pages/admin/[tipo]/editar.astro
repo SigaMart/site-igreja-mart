@@ -6,6 +6,7 @@ import Admin from '../../../layouts/Admin.astro';
 import Icone from '../../../components/Icone.astro';
 import SeletorImagem from '../../../components/admin/SeletorImagem.astro';
 import EditorVisual from '../../../components/admin/EditorVisual.astro';
+import BuscarVersiculo from '../../../components/admin/BuscarVersiculo.astro';
 import { TIPOS } from '../../../lib/admin/conteudo';
 import { ler, gravar, apagar, lerMarkdown, montarMarkdown, slugificar } from '../../../lib/admin/github';
 import { brParaUtc, utcParaBr, todos, fmtDataHora } from '../../../lib/admin/db';
@@ -154,7 +155,12 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
               <span class="flex items-center justify-between gap-2">{c.rotulo}
                 {c.ia && <button type="button" data-ia={c.k} class="rounded-full px-2 py-0.5 text-xs font-bold text-violet-700 hover:bg-violet-50" title="Sugerir com IA">✨ Sugerir</button>}
               </span>
-              {c.tipo === 'area' ? <textarea name={c.k} rows="3" class="adm-campo" data-campo={c.k}>{dados[c.k]}</textarea>
+              {c.k === 'versiculo' ? (
+                <span class="relative block">
+                  <input name={c.k} type="text" value={dados[c.k]} class="adm-campo !pr-12" data-campo={c.k} placeholder="Clique na lupa para escolher" />
+                  <button type="button" data-abrir-versiculo class="absolute top-1/2 right-1.5 mt-0.75 -translate-y-1/2 rounded-xl bg-laranja-500 p-2 text-tinta hover:bg-laranja-400" title="Procurar na Bíblia" aria-label="Procurar versículo na Bíblia"><Icone nome="busca" class="size-4" /></button>
+                </span>
+              ) : c.tipo === 'area' ? <textarea name={c.k} rows="3" class="adm-campo" data-campo={c.k}>{dados[c.k]}</textarea>
                 : <input name={c.k} type={c.tipo === 'datahora' ? 'datetime-local' : 'text'} value={dados[c.k]} class="adm-campo" data-campo={c.k} />}
               {c.dica && <span class="adm-dica">{c.dica}</span>}
             </label>
@@ -208,6 +214,7 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
       </div>
     </dialog>
   </form>
+  {tipo.campos.some((c) => c.k === 'versiculo') && <BuscarVersiculo />}
 </Admin>
 
 <script>
@@ -265,7 +272,7 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
     const caixa = document.createElement('div');
     caixa.className = 'mt-2 rounded-xl p-3 text-xs font-normal';
     caixa.hidden = true;
-    vers.after(caixa);
+    (vers.closest("span.relative") ?? vers).after(caixa);
     const livrosCache = new Map<string, Promise<{ capitulos: string[][] }>>();
     let timer = 0, seq = 0;
     const mostrar = (cls: string, html: string) => { caixa.className = `mt-2 rounded-xl p-3 text-xs font-normal ${cls}`; caixa.innerHTML = html; caixa.hidden = false; };
