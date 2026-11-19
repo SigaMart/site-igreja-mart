@@ -1,10 +1,10 @@
 ---
-titulo: Misericórdias novas a cada manhã
-descricao: Um devocional sobre recomeços. Ontem não precisa definir o seu hoje, porque as misericórdias de Deus se renovam a cada manhã.
-data: 2026-11-17
-versiculo: Lamentações 3:22-23
-oracao: Senhor, obrigado porque a tua misericórdia não acabou ontem. Hoje eu recebo o teu novo começo. Tira de mim o peso do que passou e me ajuda a viver este dia confiando na tua fidelidade. Em nome de Jesus, amém.
-pergunta: O que você precisa deixar no "ontem" para viver o dia de hoje com leveza?
+titulo: "Misericórdias novas a cada manhã"
+versiculo: "Lamentações 3:22-23"
+descricao: "Um devocional sobre recomeços. Ontem não precisa definir o seu hoje, porque as misericórdias de Deus se renovam a cada manhã."
+data: 2026-11-19
+oracao: "Senhor, obrigado porque a tua misericórdia não acabou ontem. Hoje eu recebo o teu novo começo. Tira de mim o peso do que passou e me ajuda a viver este dia confiando na tua fidelidade. Em nome de Jesus, amém."
+pergunta: "O que você precisa deixar no \"ontem\" para viver o dia de hoje com leveza?"
 ---
 
 Jeremias escreveu essas palavras em um dos momentos mais tristes da história de Israel. Jerusalém estava destruída, o templo tinha virado ruína e o povo havia perdido quase tudo. Mesmo assim, no meio do lamento, ele levanta os olhos e declara: **as misericórdias do Senhor não têm fim.**
