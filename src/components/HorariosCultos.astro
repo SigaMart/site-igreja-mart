@@ -11,7 +11,6 @@ import Icone from './Icone.astro';
       <li data-culto={i} class="card culto-card relative flex flex-col p-6 transition">
         <span class="absolute -top-3 right-6 flex gap-1.5">
           <span data-quando hidden class="rounded-full bg-tinta px-3 py-1 text-xs font-bold text-white"></span>
-          {i === 0 && <span class="rounded-full bg-laranja-500 px-3 py-1 text-xs font-bold">Principal</span>}
         </span>
         <p class="text-sm font-bold tracking-wider text-laranja-700 uppercase">{c.diaNome}</p>
         <p class="mt-2 text-3xl font-extrabold tracking-tight">{fmtHora(c.inicio)} <span class="text-lg font-semibold text-tinta-suave">às {fmtHora(c.fim)}</span></p>

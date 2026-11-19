@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import Base from '../layouts/Base.astro';
 import TopoPagina from '../components/TopoPagina.astro';
+import SeguirAgenda from '../components/SeguirAgenda.astro';
 import HorariosCultos from '../components/HorariosCultos.astro';
 import Perguntas from '../components/Perguntas.astro';
 import Icone from '../components/Icone.astro';
@@ -58,18 +59,7 @@ const faqCultos = [FAQ[1], FAQ[4], FAQ[5]];
   </section>
 
   <section id="agenda" class="container-site scroll-mt-24 py-20">
-    <span class="eyebrow">Agenda</span>
-    <h2 class="titulo mt-4">Eventos <span class="destaque">especiais</span></h2>
-    <div class="card mt-8 flex flex-col items-start gap-5 p-8 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex items-start gap-4">
-        <span class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-laranja-500"><Icone nome="calendario" /></span>
-        <div>
-          <p class="text-lg font-extrabold">Conferências, encontros e datas especiais</p>
-          <p class="mt-1 text-tinta-suave">A programação de eventos é divulgada no nosso Instagram. Siga para não perder nada.</p>
-        </div>
-      </div>
-      <a href={SITE.redes.instagram} target="_blank" rel="noopener" class="btn btn-primario shrink-0"><Icone nome="instagram" class="size-4" /> {SITE.instagramUsuario}</a>
-    </div>
+    <SeguirAgenda calendario />
   </section>
 
   <section class="container-site max-w-3xl">

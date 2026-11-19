@@ -1,0 +1,66 @@
+---
+// Chamada para seguir a agenda pública da igreja no Google Agenda (ou no calendário do iPhone).
+// Quem segue recebe os cultos e eventos no celular e vê as mudanças sozinho.
+import { SITE } from '../config/site';
+import Icone from './Icone.astro';
+
+interface Props { calendario?: boolean }
+const { calendario = false } = Astro.props;
+
+const id = SITE.agendaGoogle;
+const google = `https://calendar.google.com/calendar/u/0?cid=${btoa(id).replace(/=+$/, '')}`;
+const apple = `webcal://calendar.google.com/calendar/ical/${encodeURIComponent(id)}/public/basic.ics`;
+const embed = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(id)}&ctz=America%2FSao_Paulo&mode=AGENDA&showTitle=0&showPrint=0&showTabs=0&showCalendars=0&showTz=0&hl=pt_BR&bgcolor=%23ffffff&color=%23f97316`;
+const vantagens = ['Cultos e eventos especiais', 'Mudanças aparecem sozinhas', 'Grátis e sem cadastro'];
+---
+<seguir-agenda class="block">
+  <div class="relative overflow-hidden rounded-[2rem] bg-tinta p-7 text-white sm:p-10">
+    <div aria-hidden="true" class="absolute -top-24 -right-24 size-72 rounded-full bg-laranja-500/25 blur-3xl"></div>
+    <div class={`relative grid items-center gap-8 ${calendario ? 'lg:grid-cols-[1fr_1.1fr]' : 'lg:grid-cols-[1.3fr_1fr]'}`}>
+      <div>
+        <span class="eyebrow text-laranja-300">Agenda da MART no seu celular</span>
+        <h2 class="mt-3 text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">
+          Fique por dentro e <span class="text-laranja-400">não perca nenhum culto</span>
+        </h2>
+        <p class="mt-4 max-w-xl text-white/80 sm:text-lg">
+          Adicione a agenda da igreja ao seu celular. Cultos, conferências e datas especiais entram na sua agenda e, se algo mudar, ela se atualiza sozinha.
+        </p>
+        <ul class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-white/90">
+          {vantagens.map((v) => <li class="flex items-center gap-2"><Icone nome="check" class="size-4 text-laranja-400" /> {v}</li>)}
+        </ul>
+        <div data-botoes class="mt-7 flex flex-wrap gap-3">
+          <a data-google href={google} target="_blank" rel="noopener" class="btn btn-primario"><Icone nome="calendario" class="size-4" /> Adicionar no Google Agenda</a>
+          <a data-apple href={apple} class="btn border border-white/30 bg-white/10 text-white hover:bg-white/20">Adicionar no iPhone</a>
+        </div>
+      </div>
+      {calendario ? (
+        <div class="overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <iframe src={embed} title="Agenda da Igreja MART" loading="lazy" class="block h-[26rem] w-full border-0"></iframe>
+        </div>
+      ) : (
+        <ol class="hidden gap-3 lg:grid">
+          {['Toque em “Adicionar”', 'Confirme no seu celular', 'Pronto: a agenda da MART aparece junto com a sua'].map((t, i) => (
+            <li class="flex items-center gap-4 rounded-2xl bg-white/8 p-4">
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-laranja-500 font-extrabold text-tinta">{i + 1}</span>
+              <span class="font-semibold">{t}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  </div>
+</seguir-agenda>
+
+<script>
+  // No iPhone/iPad/Mac, o botão do calendário da Apple vem primeiro e em destaque.
+  class SeguirAgenda extends HTMLElement {
+    connectedCallback() {
+      const apple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+      if (!apple) return;
+      const g = this.querySelector<HTMLElement>('[data-google]')!, a = this.querySelector<HTMLElement>('[data-apple]')!;
+      [g.className, a.className] = [a.className, g.className];
+      a.parentElement!.prepend(a);
+    }
+  }
+  customElements.define('seguir-agenda', SeguirAgenda);
+</script>

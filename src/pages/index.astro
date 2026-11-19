@@ -6,6 +6,7 @@ import Icone from '../components/Icone.astro';
 import PalavraDoDia from '../components/PalavraDoDia.astro';
 import ProximoCulto from '../components/ProximoCulto.astro';
 import HorariosCultos from '../components/HorariosCultos.astro';
+import SeguirAgenda from '../components/SeguirAgenda.astro';
 import CelularWhatsApp from '../components/CelularWhatsApp.astro';
 import Perguntas from '../components/Perguntas.astro';
 import { SITE, enderecoCompleto, mapsLink, mapsEmbed } from '../config/site';
@@ -59,6 +60,10 @@ const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { day: 'numeric', mont
           <span class="flex size-11 items-center justify-center rounded-xl bg-tinta text-white"><Icone nome="livro" /></span>
           <span class="leading-tight"><span class="block font-extrabold">Bíblia online</span><span class="block text-sm text-tinta-suave">Pesquise versículos</span></span>
         </a>
+        <a href={`/devocionais/${destaque.id}/`} class="hidden items-center gap-3 rounded-2xl bg-white/95 p-4 pr-6 sm:flex text-tinta shadow-xl shadow-tinta/10">
+          <span class="flex size-11 items-center justify-center rounded-xl bg-tinta text-white"><Icone nome="sol" /></span>
+          <span class="leading-tight"><span class="block font-extrabold">Devocional</span><span class="block max-w-[13rem] truncate text-sm text-tinta-suave">{destaque.data.titulo}</span></span>
+        </a>
       </div>
     </div>
   </section>
@@ -73,6 +78,7 @@ const dataBR = (d: Date) => d.toLocaleDateString('pt-BR', { day: 'numeric', mont
       <a href="/cultos/#primeira-visita" class="inline-flex items-center gap-2 font-bold text-laranja-700 hover:underline">Primeira vez? Veja o que esperar <Icone nome="seta" class="size-4" /></a>
     </div>
     <div class="mt-10"><HorariosCultos /></div>
+    <div class="mt-10"><SeguirAgenda /></div>
   </section>
 
   <!-- SOBRE -->

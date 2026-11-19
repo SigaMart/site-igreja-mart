@@ -34,10 +34,14 @@ export const SITE = {
 
   // Horários de culto (dia: 0 = domingo ... 6 = sábado)
   cultos: [
-    { dia: 0, diaNome: 'Domingo', inicio: '18:00', fim: '20:30', nome: 'Culto da Família', descricao: 'Nosso culto principal da semana: louvor, palavra e comunhão para toda a família.' },
-    { dia: 2, diaNome: 'Terça-feira', inicio: '20:00', fim: '21:30', nome: 'Culto de Terça', descricao: 'Um tempo no meio da semana para renovar as forças, orar e ouvir a Palavra.' },
-    { dia: 3, diaNome: 'Quarta-feira', inicio: '15:30', fim: '17:00', nome: 'Culto da Tarde', descricao: 'Culto à tarde, ideal para quem tem a agenda livre durante o dia.' },
+    { dia: 0, diaNome: 'Domingo', inicio: '18:00', fim: '20:30', nome: 'Culto da Família', descricao: 'Louvor, palavra e comunhão para toda a família, do mais novo ao mais velho.' },
+    { dia: 2, diaNome: 'Terça-feira', inicio: '20:00', fim: '21:30', nome: 'Culto de Libertação', descricao: 'Um tempo no meio da semana para renovar as forças, orar e ouvir a Palavra.' },
+    { dia: 3, diaNome: 'Quarta-feira', inicio: '15:30', fim: '17:00', nome: 'Tarde da Bênção', descricao: 'Um culto à tarde para receber a bênção de Deus, ideal para quem tem o dia livre.' },
   ],
+
+  // Agenda pública no Google Agenda: quem segue recebe os eventos no celular e fica sempre atualizado.
+  // Para editar: Google Agenda da conta da igreja, agenda "Igreja MART".
+  agendaGoogle: 'fa6f99955adb9643b4ecdf77630f2b935aa05532729fe4ffc836f069d8fafb65@group.calendar.google.com',
 } as const;
 
 /** "18:00" -> "18h", "20:30" -> "20h30" */
