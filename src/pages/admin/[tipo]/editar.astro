@@ -211,6 +211,7 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
 </Admin>
 
 <script>
+  import { interpretarReferencia, formatarReferencia } from '../../../lib/referencia';
   const form = document.getElementById('editor-conteudo') as HTMLFormElement;
   const tipo = form.dataset.tipo!;
   const campo = (k: string) => form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-campo="${k}"]`);
@@ -257,6 +258,51 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
     anterior = null; desfazer.hidden = true; status.textContent = 'Desfeito.';
   });
 
+  // ---------- Versículo: confere na Bíblia do site e mostra o texto encontrado
+  const vers = campo('versiculo') as HTMLInputElement | null;
+  let versOk = true;
+  if (vers) {
+    const caixa = document.createElement('div');
+    caixa.className = 'mt-2 rounded-xl p-3 text-xs font-normal';
+    caixa.hidden = true;
+    vers.after(caixa);
+    const livrosCache = new Map<string, Promise<{ capitulos: string[][] }>>();
+    let timer = 0, seq = 0;
+    const mostrar = (cls: string, html: string) => { caixa.className = `mt-2 rounded-xl p-3 text-xs font-normal ${cls}`; caixa.innerHTML = html; caixa.hidden = false; };
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    async function conferir() {
+      const meu = ++seq;
+      const txt = vers!.value.trim();
+      if (!txt) { versOk = true; caixa.hidden = true; return; }
+      const r = interpretarReferencia(txt);
+      if (!r) { versOk = false; mostrar('bg-red-50 text-red-800', '<b>✕ Não reconheci essa referência.</b> Use o formato Livro capítulo:versículo, ex.: Salmos 23:1-3.'); return; }
+      mostrar('bg-creme text-tinta-suave', 'Procurando na Bíblia…');
+      try {
+        if (!livrosCache.has(r.livro.slug)) livrosCache.set(r.livro.slug, fetch(`/dados/biblia/${r.livro.slug}.json`).then((x) => { if (!x.ok) throw 0; return x.json(); }));
+        const livro = await livrosCache.get(r.livro.slug)!;
+        if (meu !== seq) return;
+        const cap = livro.capitulos[r.cap - 1] ?? [];
+        const ini = r.vIni ?? 1, fim = r.vFim ?? (r.vIni ?? cap.length);
+        const sel = cap.slice(ini - 1, fim);
+        if (!cap.length || !sel.length || fim > cap.length || (r.vFim && r.vFim < ini)) {
+          versOk = false;
+          const max = cap.length ? `${r.livro.nome} ${r.cap} tem ${cap.length} versículos.` : `${r.livro.nome} não tem o capítulo ${r.cap}.`;
+          mostrar('bg-red-50 text-red-800', `<b>✕ Versículo não encontrado.</b> ${esc(max)}`);
+          return;
+        }
+        versOk = true;
+        const texto = sel.join(' ');
+        mostrar('bg-green-50 text-green-900', `<b class="text-green-700">✓ Encontrado na Bíblia: ${esc(formatarReferencia(r))}</b><span class="mt-1 block font-serif italic">“${esc(texto.length > 320 ? texto.slice(0, 320) + '…' : texto)}”</span>`);
+      } catch {
+        if (meu !== seq) return;
+        versOk = true; // sem conexão: não trava o salvar
+        mostrar('bg-amber-50 text-amber-800', 'Não consegui conferir agora. Confira a referência antes de salvar.');
+      }
+    }
+    vers.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(conferir, 350); });
+    conferir();
+  }
+
   // ---------- Agendamento
   const data = campo('data') as HTMLInputElement;
   const rascunho = form.querySelector<HTMLInputElement>('[data-rascunho]');
@@ -281,6 +327,12 @@ const linkPrevia = `${await urlPublica()}${tipo.url}${id || 'endereco'}/`;
   let confirmado = false;
   form.addEventListener('submit', (e) => {
     const botao = e.submitter as HTMLButtonElement | null;
+    if (botao?.name !== 'acao' && !versOk) {
+      e.preventDefault();
+      vers?.focus();
+      alert('O versículo não foi encontrado na Bíblia. Corrija a referência antes de salvar.');
+      return;
+    }
     if (botao?.name === 'acao' || confirmado || !futuro()) return;
     e.preventDefault();
     const quando = form.querySelector<HTMLInputElement>('[data-wa-quando]');

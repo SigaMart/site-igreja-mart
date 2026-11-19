@@ -65,7 +65,8 @@ O texto pode chegar em HTML (vindo do editor visual). Responda em Markdown, mas 
 (<img>, <figure class="video">…</figure>, <div data-youtube-video>…</div>) exatamente como estão, em HTML, no mesmo lugar, cada um em uma linha própria.`,
   titulo: `"titulo": um título curto (até 60 caracteres), convidativo, sem ponto final.`,
   descricao: `"descricao": um resumo de 1 a 2 frases (até 160 caracteres) para o Google e o WhatsApp.`,
-  versiculo: `"versiculo": a referência bíblica central do texto (ex.: "Mateus 7:24-25"). Se o texto já cita uma, use ela.`,
+  versiculo: `"versiculo": SOMENTE a referência bíblica central do texto, sem o texto do versículo (ex.: "Mateus 7:24-25").
+Nome do livro por extenso em português (ex.: "1 Coríntios", "Salmos"). Se o texto já cita uma, use ela.`,
   oracao: `"oracao": uma oração curta (3 a 5 frases) em primeira pessoa, ligada ao tema, terminando com "Amém."`,
   pergunta: `"pergunta": uma pergunta pessoal para reflexão, ligada ao tema.`,
   categoria: `"categoria": uma categoria curta para o blog (ex.: Primeiros passos, Família, Vida com Deus).`,
