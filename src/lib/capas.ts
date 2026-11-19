@@ -144,7 +144,8 @@ async function layout(c: Capa, logo: string, logoBranco: string): Promise<No> {
 
   // Bíblia: paisagem do grupo do livro, escurecida à esquerda, com o livro em destaque
   const branco = (a: number) => `rgba(255,255,255,${a})`;
-  const tamTitulo = c.titulo.length > 14 ? 76 : 96;
+  // Sem trecho (capa do livro), o nome do livro ocupa mais espaço.
+  const tamTitulo = c.trecho ? (c.titulo.length > 14 ? 76 : 96) : (c.titulo.length > 14 ? 96 : 128);
   return h('div', { width: W, height: H, fontFamily: 'Jakarta', background: '#1a120d' },
     img(await fundoBase64(c.foto), { position: 'absolute', left: 0, top: 0, width: W, height: H }),
     h('div', { position: 'absolute', left: 0, top: 0, width: W, height: H, backgroundImage: 'linear-gradient(90deg, rgba(18,11,7,0.92) 0%, rgba(18,11,7,0.78) 48%, rgba(18,11,7,0.25) 100%)' }),

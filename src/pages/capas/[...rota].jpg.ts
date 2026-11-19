@@ -4,7 +4,7 @@ import type { APIRoute, GetStaticPaths } from 'astro';
 import { getCollection } from 'astro:content';
 import { SITE, fmtHora } from '../../config/site';
 import { livros } from '../../lib/referencia';
-import { capitulo, passagem } from '../../lib/biblia';
+import { passagem } from '../../lib/biblia';
 import { gerarCapa, caminhoImagem, type Capa } from '../../lib/capas';
 
 const horarios = SITE.cultos.map((c) => `${c.diaNome.split('-')[0]} ${fmtHora(c.inicio)}`).join(' · ');
@@ -55,23 +55,11 @@ export const getStaticPaths = (async () => {
   livros.forEach((l, i) => {
     const g = grupoDoLivro(i);
     const testamento = l.testamento === 'AT' ? 'Antigo Testamento' : 'Novo Testamento';
-    const eyebrow = `${g.nome} · ${testamento}`;
+    // Uma capa por livro, usada também por todos os capítulos dele (o link de um versículo não mostra outro versículo).
     capas[`/biblia/${l.slug}/`] = {
-      tipo: 'livro', eyebrow, titulo: l.nome, foto: g.foto,
-      subtitulo: `${l.caps} ${l.caps > 1 ? 'capítulos' : 'capítulo'}`,
-      trecho: capitulo(l.slug, 1)[0], referencia: `${l.nome} 1:1`,
+      tipo: 'livro', eyebrow: `${g.nome} · ${testamento}`, titulo: l.nome, foto: g.foto,
+      subtitulo: `${l.caps} ${l.caps > 1 ? 'capítulos' : 'capítulo'} · Leia online na Bíblia Livre`,
     };
-    for (let cap = 1; cap <= l.caps; cap++) {
-      const versos = capitulo(l.slug, cap);
-      // Começo do capítulo: o 1º versículo (e o 2º, se o 1º for curto)
-      let trecho = '', n = 0;
-      for (const v of versos) { if (trecho.length > 80) break; trecho += (trecho ? ' ' : '') + v; n++; }
-      capas[`/biblia/${l.slug}/${cap}/`] = {
-        tipo: 'livro', eyebrow, titulo: l.nome, destaque: String(cap), foto: g.foto,
-        subtitulo: `${versos.length} versículos`,
-        trecho, referencia: `${l.nome} ${cap}:1${n > 1 ? `-${n}` : ''}`,
-      };
-    }
   });
 
   return Object.entries(capas).map(([pagina, capa]) => ({
